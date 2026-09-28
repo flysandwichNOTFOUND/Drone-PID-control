@@ -32,14 +32,14 @@ GRAVITY = 9.81
 # ============================================================
 #height PID
 KP = 49.967
-KI = 0.028
+KI = 1
 KD = 45.189
 # Orientation PID gains: [Kp, Ki, Kd]
 ROLL_GAINS = np.array([13.893, 0,  6.789])
 PITCH_GAINS = np.array([13.757, 0.026, 6.772])
 YAW_GAINS = np.array([15.158408 , 0.006  ,  21.907])
-X_POSITION_GAINS = np.array([0.057, 0.0, 0.111])
-Y_POSITION_GAINS = np.array([0.057, 0.0, 0.111])
+X_POSITION_GAINS = np.array([0.056, 0.003, 0.11])
+Y_POSITION_GAINS = np.array([0.056, 0.003, 0.11])
 
 # Target orientation in degrees
 
@@ -47,7 +47,7 @@ Y_POSITION_GAINS = np.array([0.057, 0.0, 0.111])
 TARGET_YAW = 0
 TARGET_HEIGHT = 2.0
 TARGET_X = 1.0
-TARGET_Y = 2.0
+TARGET_Y = 1.0
 
 MAX_ORIENTATION_CORRECTION = 20.0
 MAX_TILT_DEGREES = 5.0
@@ -69,9 +69,9 @@ HOVER_SPEED = np.sqrt(
 # ============================================================
 
 WIND_VELOCITY = np.array([
-    0.0,                            # x-direction wind
-    0.0,                            # y-direction wind
-    0.0                             # vertical wind
+    0,                            # x-direction wind
+    0,                            # y-direction wind
+    -0                            # vertical wind
 ], dtype = float)
 
 WIND_FORCE_COEFFICIENT = 0.2
@@ -82,7 +82,7 @@ WIND_FORCE_COEFFICIENT = 0.2
 # ============================================================
 
 DT = 0.01                          # seconds per step
-SIMULATION_TIME = 20.0             # total simulation time
+SIMULATION_TIME = 40.0             # total simulation time
 
 
 
@@ -161,6 +161,10 @@ def run_simulation():
 
         current_time = step * DT
 
+        #if step == int(10.0 / DT):
+        #    position_controller.x_integral = 0.0
+        #    position_controller.y_integral = 0.0
+
         base_motor_speeds = (
             height_controller.calculate_motor_speed(
                 target_height=TARGET_HEIGHT,
@@ -215,6 +219,13 @@ def run_simulation():
         )
 
         external_force = environment.calculate_wind_force(state)
+
+        # No wind testing, for debug
+
+        #if current_time < 10.0:
+        #    external_force = np.zeros(3, dtype=float)
+        #else:
+        #    external_force = environment.calculate_wind_force(state)
 
         drone.update_state(
             state=state,
