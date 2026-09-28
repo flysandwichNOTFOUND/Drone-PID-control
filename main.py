@@ -31,15 +31,15 @@ GRAVITY = 9.81
 # Change these values to tune the PID controller
 # ============================================================
 #height PID
-KP = 44.801684
-KI = 0.052019
-KD = 47.593191
+KP = 49.967
+KI = 0.028
+KD = 45.189
 # Orientation PID gains: [Kp, Ki, Kd]
-ROLL_GAINS = np.array([9.884521, 0,  4.714994])
-PITCH_GAINS = np.array([9.963423, 0.029695, 4.678016])
-YAW_GAINS = np.array([15.158408 , 0.013277   ,  14.900141])
-X_POSITION_GAINS = np.array([0.01, 0.0, 0.08])
-Y_POSITION_GAINS = np.array([0.01, 0.0, 0.08])
+ROLL_GAINS = np.array([13.893, 0,  6.789])
+PITCH_GAINS = np.array([13.757, 0.026, 6.772])
+YAW_GAINS = np.array([15.158408 , 0.006  ,  21.907])
+X_POSITION_GAINS = np.array([0.057, 0.0, 0.111])
+Y_POSITION_GAINS = np.array([0.057, 0.0, 0.111])
 
 # Target orientation in degrees
 
@@ -47,7 +47,7 @@ Y_POSITION_GAINS = np.array([0.01, 0.0, 0.08])
 TARGET_YAW = 0
 TARGET_HEIGHT = 2.0
 TARGET_X = 1.0
-TARGET_Y = 0
+TARGET_Y = 2.0
 
 MAX_ORIENTATION_CORRECTION = 20.0
 MAX_TILT_DEGREES = 5.0
