@@ -109,9 +109,18 @@ class Drone:
     def angular_acceleration(self, state):
         if np.any(self.moi <= 0):
             raise ValueError("Total MOI must be greater than zero.")
-        else:
-            angular_acceleration = (self.net_torques(state) / self.moi)
-            return angular_acceleration 
+
+        torque = self.net_torques(state)
+        angular_momentum = self.moi * state.angular_velocity
+
+        gyroscopic_term = np.cross(
+            state.angular_velocity,
+            angular_momentum
+        )
+
+        return (
+            torque - gyroscopic_term
+        ) / self.moi
 
     def update_state(self, state, dt, external_force = None):
         if dt <= 0:
