@@ -1,4 +1,4 @@
-"""Automatically tune the prototype drone PID controllers.
+"""Automatically tune the PID controllers used by the drone prototype.
 
 Place this file beside:
     testing.py
@@ -7,9 +7,17 @@ Place this file beside:
 Run:
     python auto_tune_pid.py
 
-The script tunes altitude, roll, pitch, and yaw in stages, validates the
-result with a combined maneuver, saves the gains to optimized_pid_gains.json,
-and saves diagnostic plots to auto_tune_results.png.
+The tuner works in stages:
+    1. Height
+    2. Roll
+    3. Pitch
+    4. Yaw
+    5. X position
+    6. Y position
+    7. Combined X/Y validation
+
+It does not modify main.py or controllerV1.py. Results are written to
+optimized_pid_gains.json and auto_tune_results.png.
 """
 
 import json
@@ -19,40 +27,108 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from testing import Drone, DroneState
-from controllerV1 import HeightPIDController, OrientationPIDController
+from controllerV1 import (
+    HeightPIDController,
+    OrientationPIDController,
+    PositionPIDController,
+)
 
 
-# ---------------------------------------------------------------------------
-# Drone and search settings -- change these to match main.py when necessary.
-# ---------------------------------------------------------------------------
-TOTAL_MASS = 2.0
+# ============================================================
+# 1. DRONE PARAMETERS -- keep these equal to main.py
+# ============================================================
+
+TOTAL_MASS = 1.0
 ARM_LENGTH = 0.20
 MAX_THRUST_PER_MOTOR = 10.0
-MOMENT_OF_INERTIA = np.array([0.005, 0.005, 0.009], dtype=float)
+
+MOMENT_OF_INERTIA = np.array(
+    [0.005, 0.005, 0.009],
+    dtype=float,
+)
+
 THRUST_COEFFICIENT = 1.0e-5
 TORQUE_COEFFICIENT = 2.0e-7
 GRAVITY = 9.81
 
-DT = 0.02
-TARGET_HEIGHT = 2.0
-MAX_ORIENTATION_CORRECTION = 20.0
 
-# More trials usually improve the result but take longer.
-TRIALS_PER_CONTROLLER = 150
+# ============================================================
+# 2. SIMULATION AND CONTROLLER SETTINGS
+# ============================================================
+
+DT = 0.01
+TARGET_HEIGHT = 2.0
+TARGET_YAW_DEGREES = 0.0
+POSITION_TEST_DISTANCE = 1.0
+
+MAX_ORIENTATION_CORRECTION = 20.0
+MAX_TILT_DEGREES = 5.0
+
+# Increase this value for a more thorough but slower search.
+TRIALS_PER_CONTROLLER = 90
 RANDOM_SEED = 7
 
-# Starting points and search ranges: (minimum, maximum).
-INITIAL_HEIGHT_GAINS = np.array([32.0, 0.0, 45.0])
-INITIAL_ROLL_GAINS = np.array([5.0, 0.0, 2.0])
-INITIAL_PITCH_GAINS = np.array([5.0, 0.0, 2.0])
-INITIAL_YAW_GAINS = np.array([10.0, 0.0, 3.0])
 
-# Keep the automatic recommendations within practical adjustment ranges around
-# the current controller settings.
-HEIGHT_BOUNDS = np.array([[20.0, 45.0], [0.0, 0.8], [30.0, 60.0]])
-ROLL_BOUNDS = np.array([[2.0, 10.0], [0.0, 0.3], [0.5, 5.0]])
-PITCH_BOUNDS = np.array([[2.0, 10.0], [0.0, 0.3], [0.5, 5.0]])
-YAW_BOUNDS = np.array([[5.0, 20.0], [0.0, 0.3], [1.0, 10.0]])
+# ============================================================
+# 3. CURRENT GAINS FROM main.py
+# ============================================================
+
+INITIAL_HEIGHT_GAINS = np.array(
+    [44.801684, 0.052019, 47.593191],
+    dtype=float,
+)
+
+INITIAL_ROLL_GAINS = np.array(
+    [9.884521, 0.0, 4.714994],
+    dtype=float,
+)
+
+INITIAL_PITCH_GAINS = np.array(
+    [9.963423, 0.029695, 4.678016],
+    dtype=float,
+)
+
+INITIAL_YAW_GAINS = np.array(
+    [15.158408, 0.013277, 14.900141],
+    dtype=float,
+)
+
+INITIAL_X_GAINS = np.array(
+    [0.01, 0.0, 0.08],
+    dtype=float,
+)
+
+INITIAL_Y_GAINS = np.array(
+    [0.01, 0.0, 0.08],
+    dtype=float,
+)
+
+
+# Search limits: [minimum, maximum] for Kp, Ki, and Kd.
+HEIGHT_BOUNDS = np.array(
+    [[20.0, 50.0], [0.0, 0.5], [25.0, 65.0]],
+    dtype=float,
+)
+
+ROLL_BOUNDS = np.array(
+    [[3.0, 14.0], [0.0, 0.20], [2.0, 10.0]],
+    dtype=float,
+)
+
+PITCH_BOUNDS = np.array(
+    [[3.0, 14.0], [0.0, 0.20], [2.0, 10.0]],
+    dtype=float,
+)
+
+YAW_BOUNDS = np.array(
+    [[8.0, 24.0], [0.0, 0.20], [5.0, 22.0]],
+    dtype=float,
+)
+
+POSITION_BOUNDS = np.array(
+    [[0.002, 0.060], [0.0, 0.010], [0.010, 0.180]],
+    dtype=float,
+)
 
 
 MAX_MOTOR_SPEED = np.sqrt(
@@ -60,7 +136,8 @@ MAX_MOTOR_SPEED = np.sqrt(
 )
 
 HOVER_SPEED = np.sqrt(
-    TOTAL_MASS * GRAVITY / (4.0 * THRUST_COEFFICIENT)
+    TOTAL_MASS * GRAVITY
+    / (4.0 * THRUST_COEFFICIENT)
 )
 
 
@@ -75,56 +152,38 @@ def create_drone():
     )
 
 
-def orientation_motor_speeds(
-    controller,
-    base_motor_speeds,
-    target_orientation,
-    state,
-    dt,
-):
-    """Support either singular or plural method names in controllerV1.py."""
-    method = getattr(controller, "calculate_motor_speeds", None)
-    if method is None:
-        method = getattr(controller, "calculate_motor_speed")
-
-    return method(
-        base_motor_speeds=base_motor_speeds,
-        target_orientation=target_orientation,
-        state=state,
-        dt=dt,
-    )
-
-
-def run_simulation(
-    height_gains,
-    roll_gains,
-    pitch_gains,
-    yaw_gains,
-    duration,
-    target_function,
-    record=False,
-):
-    """Run one deterministic, no-wind simulation for a set of gains."""
-    drone = create_drone()
-    state = DroneState()
-
+def create_controllers(gains):
     height_controller = HeightPIDController(
-        kp=height_gains[0],
-        ki=height_gains[1],
-        kd=height_gains[2],
+        kp=gains["height"][0],
+        ki=gains["height"][1],
+        kd=gains["height"][2],
         hover_speed=HOVER_SPEED,
         max_motor_speed=MAX_MOTOR_SPEED,
     )
 
     orientation_controller = OrientationPIDController(
-        roll_gains=roll_gains,
-        pitch_gains=pitch_gains,
-        yaw_gains=yaw_gains,
+        roll_gains=gains["roll"],
+        pitch_gains=gains["pitch"],
+        yaw_gains=gains["yaw"],
         max_correction=MAX_ORIENTATION_CORRECTION,
         max_motor_speed=MAX_MOTOR_SPEED,
     )
 
-    history = {
+    position_controller = PositionPIDController(
+        x_gains=gains["x"],
+        y_gains=gains["y"],
+        max_tilt=np.radians(MAX_TILT_DEGREES),
+    )
+
+    return (
+        height_controller,
+        orientation_controller,
+        position_controller,
+    )
+
+
+def empty_history():
+    return {
         "time": [],
         "position": [],
         "velocity": [],
@@ -133,146 +192,340 @@ def run_simulation(
         "motor_speeds": [],
         "target_height": [],
         "target_orientation": [],
+        "target_position": [],
+        "saturation_fraction": 0.0,
     }
 
-    saturated_steps = 0
-    steps = int(duration / DT)
 
-    for step in range(steps):
-        time = step * DT
-        target_height, target_orientation = target_function(time)
-        target_orientation = np.asarray(target_orientation, dtype=float)
+def run_simulation(
+    gains,
+    duration,
+    fixed_orientation=None,
+    target_position=None,
+):
+    """Run one no-wind simulation using the current main.py control flow."""
 
-        base_motor_speeds = height_controller.calculate_motor_speed(
-            target_height=target_height,
-            state=state,
-            dt=DT,
+    if fixed_orientation is not None and target_position is not None:
+        raise ValueError(
+            "Use either fixed_orientation or target_position, not both."
         )
 
-        state.motor_speeds = orientation_motor_speeds(
-            controller=orientation_controller,
-            base_motor_speeds=base_motor_speeds,
-            target_orientation=target_orientation,
-            state=state,
-            dt=DT,
+    drone = create_drone()
+    state = DroneState()
+
+    (
+        height_controller,
+        orientation_controller,
+        position_controller,
+    ) = create_controllers(gains)
+
+    if fixed_orientation is None:
+        fixed_orientation = np.zeros(3, dtype=float)
+    else:
+        fixed_orientation = np.asarray(
+            fixed_orientation,
+            dtype=float,
+        )
+
+    if target_position is None:
+        target_position_array = np.zeros(2, dtype=float)
+    else:
+        target_position_array = np.asarray(
+            target_position,
+            dtype=float,
+        )
+
+    history = empty_history()
+    saturated_steps = 0
+    number_of_steps = int(duration / DT)
+
+    for step in range(number_of_steps):
+        base_motor_speeds = (
+            height_controller.calculate_motor_speed(
+                target_height=TARGET_HEIGHT,
+                state=state,
+                dt=DT,
+            )
+        )
+
+        if target_position is None:
+            target_orientation = fixed_orientation.copy()
+        else:
+            target_orientation = (
+                position_controller.calculate_target_orientation(
+                    target_position=target_position_array,
+                    target_yaw=np.radians(TARGET_YAW_DEGREES),
+                    state=state,
+                    dt=DT,
+                )
+            )
+
+        # Match main.py's compensation for vertical thrust lost during tilt.
+        vertical_thrust_factor = (
+            np.cos(state.orientation[0])
+            * np.cos(state.orientation[1])
+        )
+
+        vertical_thrust_factor = max(
+            vertical_thrust_factor,
+            0.5,
+        )
+
+        base_motor_speeds = (
+            base_motor_speeds
+            / np.sqrt(vertical_thrust_factor)
+        )
+
+        base_motor_speeds = np.clip(
+            base_motor_speeds,
+            0.0,
+            MAX_MOTOR_SPEED,
+        )
+
+        state.motor_speeds = (
+            orientation_controller.calculate_motor_speed(
+                base_motor_speeds=base_motor_speeds,
+                target_orientation=target_orientation,
+                state=state,
+                dt=DT,
+            )
         )
 
         if np.any(
             (state.motor_speeds <= 1.0e-9)
-            | (state.motor_speeds >= MAX_MOTOR_SPEED - 1.0e-9)
+            | (
+                state.motor_speeds
+                >= MAX_MOTOR_SPEED - 1.0e-9
+            )
         ):
             saturated_steps += 1
 
-        drone.update_state(state=state, dt=DT)
+        drone.update_state(
+            state=state,
+            dt=DT,
+            external_force=np.zeros(3, dtype=float),
+        )
 
-        state_values = np.concatenate(
+        all_state_values = np.concatenate(
             [
                 state.position,
                 state.velocity,
                 state.orientation,
                 state.angular_velocity,
+                state.motor_speeds,
             ]
         )
 
         if (
-            not np.all(np.isfinite(state_values))
-            or np.linalg.norm(state.position) > 1.0e3
-            or np.linalg.norm(state.orientation) > 20.0
+            not np.all(np.isfinite(all_state_values))
+            or np.linalg.norm(state.position) > 100.0
+            or np.linalg.norm(state.orientation) > 4.0 * np.pi
         ):
             return None
 
-        if record:
-            history["time"].append(time + DT)
-            history["position"].append(state.position.copy())
-            history["velocity"].append(state.velocity.copy())
-            history["orientation"].append(state.orientation.copy())
-            history["angular_velocity"].append(
-                state.angular_velocity.copy()
-            )
-            history["motor_speeds"].append(state.motor_speeds.copy())
-            history["target_height"].append(float(target_height))
-            history["target_orientation"].append(
-                target_orientation.copy()
-            )
+        history["time"].append((step + 1) * DT)
+        history["position"].append(state.position.copy())
+        history["velocity"].append(state.velocity.copy())
+        history["orientation"].append(
+            state.orientation.copy()
+        )
+        history["angular_velocity"].append(
+            state.angular_velocity.copy()
+        )
+        history["motor_speeds"].append(
+            state.motor_speeds.copy()
+        )
+        history["target_height"].append(TARGET_HEIGHT)
+        history["target_orientation"].append(
+            target_orientation.copy()
+        )
+        history["target_position"].append(
+            target_position_array.copy()
+        )
 
-    if not record:
-        # Record only the final values needed by a caller that requested no
-        # detailed history.
-        history["position"] = [state.position.copy()]
-        history["velocity"] = [state.velocity.copy()]
-        history["orientation"] = [state.orientation.copy()]
-        history["angular_velocity"] = [state.angular_velocity.copy()]
+    history["saturation_fraction"] = (
+        saturated_steps / number_of_steps
+    )
 
-    history["saturation_fraction"] = saturated_steps / steps
     return history
 
 
-def constant_target(height, orientation):
-    orientation = np.asarray(orientation, dtype=float)
+def history_arrays(history):
+    return {
+        "time": np.asarray(history["time"], dtype=float),
+        "position": np.asarray(
+            history["position"],
+            dtype=float,
+        ),
+        "velocity": np.asarray(
+            history["velocity"],
+            dtype=float,
+        ),
+        "orientation": np.asarray(
+            history["orientation"],
+            dtype=float,
+        ),
+        "angular_velocity": np.asarray(
+            history["angular_velocity"],
+            dtype=float,
+        ),
+        "motor_speeds": np.asarray(
+            history["motor_speeds"],
+            dtype=float,
+        ),
+        "target_height": np.asarray(
+            history["target_height"],
+            dtype=float,
+        ),
+        "target_orientation": np.asarray(
+            history["target_orientation"],
+            dtype=float,
+        ),
+        "target_position": np.asarray(
+            history["target_position"],
+            dtype=float,
+        ),
+    }
 
-    def target_function(_time):
-        return height, orientation
 
-    return target_function
-
-
-def score_case(history, target_height, target_orientation, axis=None):
+def score_height(history):
     if history is None:
         return float("inf")
 
-    position = np.asarray(history["position"])
-    velocity = np.asarray(history["velocity"])
-    orientation = np.asarray(history["orientation"])
-    angular_velocity = np.asarray(history["angular_velocity"])
+    data = history_arrays(history)
+    height_error = TARGET_HEIGHT - data["position"][:, 2]
+    vertical_velocity = data["velocity"][:, 2]
 
-    height_error = target_height - position[:, 2]
-    saturation_penalty = 200.0 * history["saturation_fraction"]
+    overshoot = max(
+        0.0,
+        np.max(data["position"][:, 2]) - TARGET_HEIGHT,
+    )
 
-    if axis is None:
-        # Altitude tuning: reward small error, little overshoot, low vertical
-        # velocity, and a settled final state.
-        overshoot = max(0.0, np.max(position[:, 2]) - target_height)
-        return (
-            8.0 * np.mean(height_error**2)
-            + 2.0 * abs(height_error[-1])
-            + 1.5 * overshoot**2
-            + 0.25 * np.mean(velocity[:, 2] ** 2)
-            + 0.5 * abs(velocity[-1, 2])
-            + saturation_penalty
-        )
-
-    target_orientation = np.asarray(target_orientation, dtype=float)
-    angle_error = target_orientation[axis] - orientation[:, axis]
-
-    # Orientation tuning also penalizes altitude loss and motion in the other
-    # axes so an axis cannot look good by destabilizing the rest of the drone.
-    other_axes = [index for index in range(3) if index != axis]
+    saturation_penalty = (
+        250.0 * history["saturation_fraction"]
+    )
 
     return (
-        250.0 * np.mean(angle_error**2)
-        + 500.0 * abs(angle_error[-1]) ** 2
-        + 2.0 * np.mean(angular_velocity[:, axis] ** 2)
-        + 80.0 * np.mean(orientation[:, other_axes] ** 2)
-        + 3.0 * np.mean(height_error**2)
+        8.0 * np.mean(height_error**2)
+        + 10.0 * height_error[-1] ** 2
+        + 2.0 * overshoot**2
+        + 0.30 * np.mean(vertical_velocity**2)
+        + 1.0 * vertical_velocity[-1] ** 2
         + saturation_penalty
     )
 
 
-def search_gains(name, initial, bounds, evaluate, rng, trials):
-    """Random search followed by two progressively smaller local searches."""
-    best_gains = np.asarray(initial, dtype=float).copy()
+def score_orientation(history, target_orientation, axis):
+    if history is None:
+        return float("inf")
+
+    data = history_arrays(history)
+    target_orientation = np.asarray(
+        target_orientation,
+        dtype=float,
+    )
+
+    angle = data["orientation"][:, axis]
+    angle_error = target_orientation[axis] - angle
+    angular_velocity = data["angular_velocity"][:, axis]
+    height_error = TARGET_HEIGHT - data["position"][:, 2]
+
+    target_angle = target_orientation[axis]
+
+    if target_angle >= 0.0:
+        overshoot = max(0.0, np.max(angle) - target_angle)
+    else:
+        overshoot = max(0.0, target_angle - np.min(angle))
+
+    other_axes = [index for index in range(3) if index != axis]
+
+    return (
+        250.0 * np.mean(angle_error**2)
+        + 700.0 * angle_error[-1] ** 2
+        + 1200.0 * overshoot**2
+        + 12.0 * np.mean(angular_velocity**2)
+        + 80.0 * angular_velocity[-1] ** 2
+        + 80.0 * np.mean(
+            data["orientation"][:, other_axes] ** 2
+        )
+        + 4.0 * np.mean(height_error**2)
+        + 250.0 * history["saturation_fraction"]
+    )
+
+
+def score_position(history, target_position, axis):
+    if history is None:
+        return float("inf")
+
+    data = history_arrays(history)
+    target_position = np.asarray(
+        target_position,
+        dtype=float,
+    )
+
+    position = data["position"]
+    velocity = data["velocity"]
+
+    axis_error = target_position[axis] - position[:, axis]
+    other_axis = 1 - axis
+    other_error = (
+        target_position[other_axis]
+        - position[:, other_axis]
+    )
+
+    # Weight the final half more heavily so the tuner rewards settling.
+    second_half = len(axis_error) // 2
+    late_error = axis_error[second_half:]
+
+    attitude_tracking_error = (
+        data["target_orientation"]
+        - data["orientation"]
+    )
+
+    height_error = TARGET_HEIGHT - position[:, 2]
+
+    return (
+        15.0 * np.mean(axis_error**2)
+        + 35.0 * np.mean(late_error**2)
+        + 120.0 * axis_error[-1] ** 2
+        + 4.0 * np.mean(velocity[:, axis] ** 2)
+        + 35.0 * velocity[-1, axis] ** 2
+        + 30.0 * np.mean(other_error**2)
+        + 80.0 * other_error[-1] ** 2
+        + 8.0 * np.mean(attitude_tracking_error**2)
+        + 5.0 * np.mean(height_error**2)
+        + 300.0 * history["saturation_fraction"]
+    )
+
+
+def search_gains(
+    name,
+    initial_gains,
+    bounds,
+    evaluate,
+    rng,
+):
+    """Random search followed by two narrower local searches."""
+
+    best_gains = np.asarray(
+        initial_gains,
+        dtype=float,
+    ).copy()
+
     best_score = evaluate(best_gains)
+    low = bounds[:, 0].copy()
+    high = bounds[:, 1].copy()
 
-    low = bounds[:, 0].astype(float).copy()
-    high = bounds[:, 1].astype(float).copy()
-    trials_per_round = max(1, trials // 3)
+    trials_per_round = max(
+        1,
+        TRIALS_PER_CONTROLLER // 3,
+    )
 
-    for round_number in range(3):
+    for round_index in range(3):
         for _ in range(trials_per_round):
             candidate = rng.uniform(low, high)
 
-            # Explicitly test PI-disabled candidates frequently. Many simple
-            # undisturbed simulations do not need an integral term.
+            # Regularly test candidates without integral gain.
             if rng.random() < 0.35:
                 candidate[1] = 0.0
 
@@ -283,159 +536,230 @@ def search_gains(name, initial, bounds, evaluate, rng, trials):
                 best_gains = candidate.copy()
 
         full_width = bounds[:, 1] - bounds[:, 0]
-        new_width = full_width * (0.30 / (round_number + 1))
-        low = np.maximum(bounds[:, 0], best_gains - new_width)
-        high = np.minimum(bounds[:, 1], best_gains + new_width)
+        search_width = full_width * (
+            0.30 / (round_index + 1)
+        )
+
+        low = np.maximum(
+            bounds[:, 0],
+            best_gains - search_width,
+        )
+
+        high = np.minimum(
+            bounds[:, 1],
+            best_gains + search_width,
+        )
 
         print(
-            f"{name}: round {round_number + 1}/3, "
-            f"best score={best_score:.6f}, "
-            f"gains={np.round(best_gains, 5)}"
+            f"{name}: round {round_index + 1}/3, "
+            f"score={best_score:.6f}, "
+            f"gains={np.round(best_gains, 6)}"
         )
 
     return best_gains, best_score
 
 
-def tune_controllers():
-    rng = np.random.default_rng(RANDOM_SEED)
-    zero = np.zeros(3, dtype=float)
-
-    def evaluate_height(candidate):
-        history = run_simulation(
-            height_gains=candidate,
-            roll_gains=INITIAL_ROLL_GAINS,
-            pitch_gains=INITIAL_PITCH_GAINS,
-            yaw_gains=INITIAL_YAW_GAINS,
-            duration=6.0,
-            target_function=constant_target(TARGET_HEIGHT, zero),
-            record=True,
-        )
-        return score_case(history, TARGET_HEIGHT, zero)
-
-    height_gains, height_score = search_gains(
-        "Height",
-        INITIAL_HEIGHT_GAINS,
-        HEIGHT_BOUNDS,
-        evaluate_height,
-        rng,
-        TRIALS_PER_CONTROLLER,
-    )
-
-    optimized = {
+def initial_gain_dictionary():
+    return {
+        "height": INITIAL_HEIGHT_GAINS.copy(),
         "roll": INITIAL_ROLL_GAINS.copy(),
         "pitch": INITIAL_PITCH_GAINS.copy(),
         "yaw": INITIAL_YAW_GAINS.copy(),
+        "x": INITIAL_X_GAINS.copy(),
+        "y": INITIAL_Y_GAINS.copy(),
     }
 
-    axis_settings = [
-        ("roll", 0, np.radians([10.0, 0.0, 0.0]), ROLL_BOUNDS),
-        ("pitch", 1, np.radians([0.0, 10.0, 0.0]), PITCH_BOUNDS),
-        ("yaw", 2, np.radians([0.0, 0.0, 15.0]), YAW_BOUNDS),
-    ]
 
-    axis_scores = {}
+def tune_controllers():
+    rng = np.random.default_rng(RANDOM_SEED)
+    gains = initial_gain_dictionary()
+    scores = {}
 
-    for name, axis, target_orientation, bounds in axis_settings:
-        def evaluate_axis(candidate, name=name, axis=axis,
-                          target_orientation=target_orientation):
-            gains = {key: value.copy() for key, value in optimized.items()}
-            gains[name] = candidate
+    def evaluate_height(candidate):
+        trial_gains = {
+            name: value.copy()
+            for name, value in gains.items()
+        }
+        trial_gains["height"] = candidate
 
-            history = run_simulation(
-                height_gains=height_gains,
-                roll_gains=gains["roll"],
-                pitch_gains=gains["pitch"],
-                yaw_gains=gains["yaw"],
-                duration=5.0,
-                target_function=constant_target(
-                    TARGET_HEIGHT,
-                    target_orientation,
-                ),
-                record=True,
-            )
-
-            return score_case(
-                history,
-                TARGET_HEIGHT,
-                target_orientation,
-                axis=axis,
-            )
-
-        gains, score = search_gains(
-            name.capitalize(),
-            optimized[name],
-            bounds,
-            evaluate_axis,
-            rng,
-            TRIALS_PER_CONTROLLER,
+        history = run_simulation(
+            gains=trial_gains,
+            duration=6.0,
+            fixed_orientation=np.zeros(3, dtype=float),
         )
 
-        optimized[name] = gains
-        axis_scores[name] = score
+        return score_height(history)
 
-    return {
-        "height": height_gains,
-        "roll": optimized["roll"],
-        "pitch": optimized["pitch"],
-        "yaw": optimized["yaw"],
-        "scores": {
-            "height": height_score,
-            **axis_scores,
-        },
-    }
+    gains["height"], scores["height"] = search_gains(
+        "Height",
+        gains["height"],
+        HEIGHT_BOUNDS,
+        evaluate_height,
+        rng,
+    )
+
+    orientation_settings = [
+        (
+            "roll",
+            0,
+            np.radians([8.0, 0.0, 0.0]),
+            ROLL_BOUNDS,
+        ),
+        (
+            "pitch",
+            1,
+            np.radians([0.0, 8.0, 0.0]),
+            PITCH_BOUNDS,
+        ),
+        (
+            "yaw",
+            2,
+            np.radians([0.0, 0.0, 12.0]),
+            YAW_BOUNDS,
+        ),
+    ]
+
+    for name, axis, target_orientation, bounds in orientation_settings:
+        def evaluate_orientation(
+            candidate,
+            controller_name=name,
+            controller_axis=axis,
+            controller_target=target_orientation,
+        ):
+            trial_gains = {
+                key: value.copy()
+                for key, value in gains.items()
+            }
+            trial_gains[controller_name] = candidate
+
+            history = run_simulation(
+                gains=trial_gains,
+                duration=5.0,
+                fixed_orientation=controller_target,
+            )
+
+            return score_orientation(
+                history,
+                controller_target,
+                controller_axis,
+            )
+
+        gains[name], scores[name] = search_gains(
+            name.capitalize(),
+            gains[name],
+            bounds,
+            evaluate_orientation,
+            rng,
+        )
+
+    position_settings = [
+        (
+            "x",
+            0,
+            np.array([POSITION_TEST_DISTANCE, 0.0]),
+        ),
+        (
+            "y",
+            1,
+            np.array([0.0, POSITION_TEST_DISTANCE]),
+        ),
+    ]
+
+    for name, axis, target_position in position_settings:
+        def evaluate_position(
+            candidate,
+            controller_name=name,
+            controller_axis=axis,
+            controller_target=target_position,
+        ):
+            trial_gains = {
+                key: value.copy()
+                for key, value in gains.items()
+            }
+            trial_gains[controller_name] = candidate
+
+            history = run_simulation(
+                gains=trial_gains,
+                duration=12.0,
+                target_position=controller_target,
+            )
+
+            return score_position(
+                history,
+                controller_target,
+                controller_axis,
+            )
+
+        gains[name], scores[name] = search_gains(
+            f"{name.upper()} position",
+            gains[name],
+            POSITION_BOUNDS,
+            evaluate_position,
+            rng,
+        )
+
+    gains["scores"] = scores
+    return gains
 
 
-def maneuver_target(time):
-    """Exercise roll, pitch, and yaw one at a time after takeoff."""
-    if time < 2.0:
-        angles = [0.0, 0.0, 0.0]
-    elif time < 4.0:
-        angles = [10.0, 0.0, 0.0]
-    elif time < 6.0:
-        angles = [0.0, -8.0, 0.0]
-    elif time < 8.0:
-        angles = [0.0, 0.0, 15.0]
-    else:
-        angles = [0.0, 0.0, 0.0]
+def combined_validation_score(history, target_position):
+    if history is None:
+        return float("inf")
 
-    return TARGET_HEIGHT, np.radians(angles)
+    return (
+        score_position(history, target_position, axis=0)
+        + score_position(history, target_position, axis=1)
+    )
 
 
-def save_results(gains, history):
-    current_gains = {
-        "height": INITIAL_HEIGHT_GAINS,
-        "roll": INITIAL_ROLL_GAINS,
-        "pitch": INITIAL_PITCH_GAINS,
-        "yaw": INITIAL_YAW_GAINS,
-    }
+def print_recommendations(gains):
+    current = initial_gain_dictionary()
 
-    recommended_gains = {
-        name: np.asarray(gains[name], dtype=float)
-        for name in current_gains
-    }
+    print("\nPID recommendations [Kp, Ki, Kd]")
+    print("----------------------------------")
 
-    adjustments = {
-        name: recommended_gains[name] - current_gains[name]
-        for name in current_gains
-    }
+    for name in current:
+        recommended = np.asarray(gains[name], dtype=float)
+        adjustment = recommended - current[name]
+
+        print(f"\n{name.capitalize()}")
+        print("  Current:     ", np.round(current[name], 6))
+        print("  Adjustment:  ", np.round(adjustment, 6))
+        print("  Recommended: ", np.round(recommended, 6))
+
+
+def save_json(gains, validation_score):
+    current = initial_gain_dictionary()
 
     output = {
         "gain_order": ["Kp", "Ki", "Kd"],
         "current_gains": {
             name: values.tolist()
-            for name, values in current_gains.items()
+            for name, values in current.items()
         },
         "recommended_adjustments": {
-            name: values.tolist()
-            for name, values in adjustments.items()
+            name: (
+                np.asarray(gains[name]) - current[name]
+            ).tolist()
+            for name in current
         },
         "recommended_new_gains": {
-            name: values.tolist()
-            for name, values in recommended_gains.items()
+            name: np.asarray(gains[name]).tolist()
+            for name in current
         },
-        "scores": {
+        "stage_scores": {
             name: float(score)
             for name, score in gains["scores"].items()
+        },
+        "combined_position_validation_score": float(
+            validation_score
+        ),
+        "settings": {
+            "dt": DT,
+            "target_height": TARGET_HEIGHT,
+            "max_tilt_degrees": MAX_TILT_DEGREES,
+            "trials_per_controller": TRIALS_PER_CONTROLLER,
+            "random_seed": RANDOM_SEED,
         },
     }
 
@@ -444,115 +768,192 @@ def save_results(gains, history):
         encoding="utf-8",
     )
 
-    time = np.asarray(history["time"])
-    position = np.asarray(history["position"])
-    velocity = np.asarray(history["velocity"])
-    orientation = np.degrees(np.asarray(history["orientation"]))
-    target_orientation = np.degrees(
-        np.asarray(history["target_orientation"])
+
+def plot_validation(history):
+    data = history_arrays(history)
+
+    time = data["time"]
+    position = data["position"]
+    velocity = data["velocity"]
+    motor_speeds = data["motor_speeds"]
+
+    orientation_degrees = np.degrees(
+        data["orientation"]
     )
-    motor_speeds = np.asarray(history["motor_speeds"])
 
-    figure, axes = plt.subplots(2, 2, figsize=(12, 8))
+    target_orientation_degrees = np.degrees(
+        data["target_orientation"]
+    )
 
-    axes[0, 0].plot(time, position[:, 2], label="Height")
+    target_position = data["target_position"]
+
+    figure, axes = plt.subplots(
+        3,
+        2,
+        figsize=(12, 12),
+    )
+
+    axes[0, 0].plot(
+        time,
+        position[:, 2],
+        label="Actual height",
+    )
     axes[0, 0].axhline(
         TARGET_HEIGHT,
-        color="black",
+        color="red",
         linestyle="--",
-        label="Target",
+        label="Target height",
     )
-    axes[0, 0].set_title("Altitude")
-    axes[0, 0].set_ylabel("Meters")
+    axes[0, 0].set_title("Drone Altitude")
+    axes[0, 0].set_ylabel("Height (m)")
     axes[0, 0].legend()
 
-    labels = ["Roll", "Pitch", "Yaw"]
-    for axis, label in enumerate(labels):
-        axes[0, 1].plot(time, orientation[:, axis], label=label)
-        axes[0, 1].plot(
-            time,
-            target_orientation[:, axis],
-            linestyle="--",
-            alpha=0.7,
-        )
-    axes[0, 1].set_title("Orientation and Targets")
-    axes[0, 1].set_ylabel("Degrees")
-    axes[0, 1].legend()
+    axes[0, 1].plot(
+        time,
+        velocity[:, 2],
+        color="tab:orange",
+    )
+    axes[0, 1].axhline(
+        0.0,
+        color="black",
+        linestyle="--",
+    )
+    axes[0, 1].set_title("Vertical Velocity")
+    axes[0, 1].set_ylabel("Vertical velocity (m/s)")
 
-    for motor in range(4):
+    for motor_index in range(4):
         axes[1, 0].plot(
             time,
-            motor_speeds[:, motor],
-            label=f"Motor {motor + 1}",
+            motor_speeds[:, motor_index],
+            label=f"Motor {motor_index + 1}",
         )
-    axes[1, 0].set_title("Motor Speeds")
-    axes[1, 0].set_ylabel("rad/s")
-    axes[1, 0].legend()
 
-    axes[1, 1].plot(time, velocity[:, 2])
-    axes[1, 1].axhline(0.0, color="black", linestyle="--")
-    axes[1, 1].set_title("Vertical Velocity")
-    axes[1, 1].set_ylabel("m/s")
+    axes[1, 0].axhline(
+        HOVER_SPEED,
+        color="red",
+        linestyle="--",
+        label="Hover speed",
+    )
+    axes[1, 0].axhline(
+        MAX_MOTOR_SPEED,
+        color="purple",
+        linestyle="--",
+        label="Maximum motor speed",
+    )
+    axes[1, 0].set_title("Motor Speeds")
+    axes[1, 0].set_ylabel("Motor speed (rad/s)")
+    axes[1, 0].legend(fontsize=8)
+
+    labels = ["Roll", "Pitch", "Yaw"]
+    colors = ["tab:blue", "tab:orange", "tab:green"]
+
+    for axis_index, label in enumerate(labels):
+        axes[1, 1].plot(
+            time,
+            orientation_degrees[:, axis_index],
+            color=colors[axis_index],
+            label=f"Actual {label}",
+        )
+        axes[1, 1].plot(
+            time,
+            target_orientation_degrees[:, axis_index],
+            color=colors[axis_index],
+            linestyle="--",
+            label=f"Target {label}",
+        )
+
+    axes[1, 1].set_title("Orientation Tracking")
+    axes[1, 1].set_ylabel("Orientation (degrees)")
+    axes[1, 1].legend(fontsize=7)
+
+    axes[2, 0].plot(
+        time,
+        position[:, 0],
+        color="tab:blue",
+        label="X position",
+    )
+    axes[2, 0].plot(
+        time,
+        position[:, 1],
+        color="tab:orange",
+        label="Y position",
+    )
+    axes[2, 0].plot(
+        time,
+        target_position[:, 0],
+        color="tab:blue",
+        linestyle="--",
+        label="Target X",
+    )
+    axes[2, 0].plot(
+        time,
+        target_position[:, 1],
+        color="tab:orange",
+        linestyle="--",
+        label="Target Y",
+    )
+    axes[2, 0].set_title("Horizontal Position")
+    axes[2, 0].set_ylabel("Position (m)")
+    axes[2, 0].legend(fontsize=8)
+
+    axes[2, 1].axis("off")
 
     for axis in axes.flat:
-        axis.set_xlabel("Time (s)")
-        axis.grid(True)
+        if axis.axison:
+            axis.set_xlabel("Time (s)")
+            axis.grid(True)
 
     figure.tight_layout()
-    figure.savefig("auto_tune_results.png", dpi=200)
+    figure.savefig(
+        "auto_tune_results.png",
+        dpi=200,
+    )
     plt.show()
 
 
 def main():
     print("Starting staged PID search...")
-    print(f"Trials per controller: {TRIALS_PER_CONTROLLER}")
-
-    gains = tune_controllers()
-
-    current_gains = {
-        "Height": INITIAL_HEIGHT_GAINS,
-        "Roll": INITIAL_ROLL_GAINS,
-        "Pitch": INITIAL_PITCH_GAINS,
-        "Yaw": INITIAL_YAW_GAINS,
-    }
-
-    recommended_gains = {
-        "Height": gains["height"],
-        "Roll": gains["roll"],
-        "Pitch": gains["pitch"],
-        "Yaw": gains["yaw"],
-    }
-
-    print("\nPID recommendations [Kp, Ki, Kd]")
-    print("----------------------------------")
-
-    for name in current_gains:
-        current = current_gains[name]
-        recommended = recommended_gains[name]
-        adjustment = recommended - current
-
-        print(f"\n{name}")
-        print("  Current:     ", np.round(current, 6))
-        print("  Adjustment:  ", np.round(adjustment, 6))
-        print("  Recommended: ", np.round(recommended, 6))
-
-    history = run_simulation(
-        height_gains=gains["height"],
-        roll_gains=gains["roll"],
-        pitch_gains=gains["pitch"],
-        yaw_gains=gains["yaw"],
-        duration=10.0,
-        target_function=maneuver_target,
-        record=True,
+    print(
+        "Stages: height, roll, pitch, yaw, "
+        "X position, Y position"
+    )
+    print(
+        f"Trials per controller: {TRIALS_PER_CONTROLLER}"
     )
 
-    if history is None:
+    gains = tune_controllers()
+    print_recommendations(gains)
+
+    validation_target = np.array(
+        [POSITION_TEST_DISTANCE, POSITION_TEST_DISTANCE],
+        dtype=float,
+    )
+
+    validation_history = run_simulation(
+        gains=gains,
+        duration=15.0,
+        target_position=validation_target,
+    )
+
+    if validation_history is None:
         raise RuntimeError(
-            "The combined validation maneuver became unstable. "
-            "Reduce the search ranges or controller correction limit."
+            "The combined X/Y validation became unstable. "
+            "Reduce the search bounds or maximum tilt."
         )
 
-    save_results(gains, history)
+    validation_score = combined_validation_score(
+        validation_history,
+        validation_target,
+    )
+
+    print(
+        "\nCombined X/Y validation score: "
+        f"{validation_score:.6f}"
+    )
+
+    save_json(gains, validation_score)
+    plot_validation(validation_history)
+
     print("\nSaved optimized_pid_gains.json")
     print("Saved auto_tune_results.png")
 
