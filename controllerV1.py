@@ -19,7 +19,16 @@ class HeightPIDController:
         current_height = state.position[2] 
         error = target_height - current_height 
  
-        self.integral_error += error * dt 
+        if abs(error) < 0.20:
+            self.integral_error += error * dt
+        else:
+            self.integral_error = 0.0
+
+        self.integral_error = np.clip(
+            self.integral_error,
+            -5.0,
+            5.0
+        )
 
         if self.previous_error is None: 
             derivative_error = 0.0 
@@ -195,6 +204,20 @@ class PositionPIDController:
 
         self.x_integral += x_error * dt
         self.y_integral += y_error * dt
+
+        if abs(x_error) < 0.5:
+            self.x_integral += x_error * dt
+        else:
+            self.x_integral = 0.0
+
+        if abs(y_error) < 0.5:
+            self.y_integral += y_error * dt
+        else:
+            self.y_integral = 0.0
+
+# Prevent unlimited accumulation
+        self.x_integral = np.clip(self.x_integral, -5.0, 5.0)
+        self.y_integral = np.clip(self.y_integral, -5.0, 5.0)
 
         kp_x, ki_x, kd_x = self.x_gains
         kp_y, ki_y, kd_y = self.y_gains
