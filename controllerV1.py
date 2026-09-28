@@ -85,10 +85,6 @@ class OrientationPIDController:
             dtype=float
         ) 
 
-        self.previous_error = None
-
-        # Added: remembers the previous roll, pitch, and yaw target.
-        self.previous_target_orientation = None
  
     def calculate_corrections(
         self,
@@ -115,29 +111,17 @@ class OrientationPIDController:
  
         self.integral_error += error * dt
 
-        # Added: check whether the target orientation changed.
-        target_changed = (
-            self.previous_target_orientation is None
-            or not np.allclose(
-                target_orientation,
-                self.previous_target_orientation
-            )
-        )
- 
-        # Modified: skip the derivative term when the target changes.
-        if self.previous_error is None or target_changed: 
-            derivative_error = np.zeros(
-                3,
-                dtype=float
-            ) 
-        else: 
-            derivative_error = (
-                error - self.previous_error
-            ) / dt 
- 
         kp = self.gains[:, 0] 
         ki = self.gains[:, 1] 
-        kd = self.gains[:, 2] 
+        kd = self.gains[:, 2]
+        
+        derivative_error = -np.asarray(
+        state.angular_velocity,
+        dtype=float
+        )
+        
+ 
+         
  
         corrections = (
             kp * error
@@ -151,13 +135,7 @@ class OrientationPIDController:
             self.max_correction
         ) 
  
-        self.previous_error = error.copy()
-
-        # Added: save the current target for the next timestep.
-        self.previous_target_orientation = (
-            target_orientation.copy()
-        )
- 
+        
         return corrections 
  
     def calculate_motor_speed(
@@ -195,3 +173,58 @@ class OrientationPIDController:
         ) 
  
         return motor_speeds
+
+class PositionPIDController:
+    def __init__(self, x_gains, y_gains, max_tilt):
+        self.x_gains = x_gains
+        self.y_gains = y_gains
+        self.max_tilt = max_tilt
+
+        self.x_integral = 0.0
+        self.y_integral = 0.0
+
+    def calculate_target_orientation(
+        self,
+        target_position,
+        target_yaw,
+        state,
+        dt
+    ):
+        x_error = target_position[0] - state.position[0]
+        y_error = target_position[1] - state.position[1]
+
+        self.x_integral += x_error * dt
+        self.y_integral += y_error * dt
+
+        kp_x, ki_x, kd_x = self.x_gains
+        kp_y, ki_y, kd_y = self.y_gains
+
+        pitch_command = (
+            kp_x * x_error
+            + ki_x * self.x_integral
+            - kd_x * state.velocity[0]
+        )
+
+        roll_command = -(
+            kp_y * y_error
+            + ki_y * self.y_integral
+            - kd_y * state.velocity[1]
+        )
+
+        roll_command = np.clip(
+            roll_command,
+            -self.max_tilt,
+            self.max_tilt
+        )
+
+        pitch_command = np.clip(
+            pitch_command,
+            -self.max_tilt,
+            self.max_tilt
+        )
+
+        return np.array([
+            roll_command,
+            pitch_command,
+            target_yaw
+        ])
