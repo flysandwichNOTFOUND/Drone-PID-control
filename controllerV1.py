@@ -13,6 +13,7 @@ class HeightPIDController:
         self.previous_error = None 
  
     def calculate_motor_speed(self, target_height, state, dt): 
+
         if dt <= 0: 
             raise ValueError("Time step must be greater than zero.") 
          
@@ -24,29 +25,18 @@ class HeightPIDController:
         else:
             self.integral_error = 0.0
 
-        self.integral_error = np.clip(
-            self.integral_error,
-            -5.0,
-            5.0
-        )
+        self.integral_error = np.clip(self.integral_error, -5.0, 5.0)
 
         if self.previous_error is None: 
             derivative_error = 0.0 
         else: 
             derivative_error = (error - self.previous_error) / dt 
  
-        correction = (self.kp * error 
-                    + self.ki * self.integral_error 
-                    + self.kd * derivative_error 
-                    ) 
+        correction = (self.kp * error  + self.ki * self.integral_error  + self.kd * derivative_error) 
  
         motor_speed = self.hover_speed + correction 
         motor_speeds = np.full(4, motor_speed, dtype=float) 
-        motor_speeds = np.clip(
-            motor_speeds,
-            0.0,
-            self.max_motor_speed
-        ) 
+        motor_speeds = np.clip(motor_speeds, 0.0, self.max_motor_speed) 
  
         self.previous_error = error 
  
@@ -54,31 +44,12 @@ class HeightPIDController:
  
  
 class OrientationPIDController: 
-    def __init__(
-        self,
-        roll_gains,
-        pitch_gains,
-        yaw_gains,
-        max_correction,
-        max_motor_speed
-    ): 
- 
-        # Each gains array contains [Kp, Ki, Kd] 
- 
-        self.roll_gains = np.asarray(
-            roll_gains,
-            dtype=float
-        ) 
+    def __init__(self, roll_gains, pitch_gains, yaw_gains, max_correction, max_motor_speed): 
 
-        self.pitch_gains = np.asarray(
-            pitch_gains,
-            dtype=float
-        ) 
-
-        self.yaw_gains = np.asarray(
-            yaw_gains,
-            dtype=float
-        ) 
+        #[Kp, Ki, Kd] for eaach
+        self.roll_gains = np.asarray(roll_gains, dtype = float) 
+        self.pitch_gains = np.asarray(pitch_gains, dtype = float) 
+        self.yaw_gains = np.asarray(yaw_gains, dtype = float) 
  
         self.gains = np.array([
             self.roll_gains,
@@ -89,34 +60,17 @@ class OrientationPIDController:
         self.max_correction = max_correction 
         self.max_motor_speed = max_motor_speed 
  
-        self.integral_error = np.zeros(
-            3,
-            dtype=float
-        ) 
+        self.integral_error = np.zeros(3, dtype = float) 
 
- 
-    def calculate_corrections(
-        self,
-        target_orientation,
-        state,
-        dt
-    ): 
+    def calculate_corrections(self, target_orientation, state, dt): 
  
         if dt <= 0: 
-            raise ValueError(
-                "Time step must be greater than zero."
-            ) 
+            raise ValueError("Time step must be greater than zero.") 
  
-        target_orientation = np.asarray(
-            target_orientation,
-            dtype=float
-        ) 
+        target_orientation = np.asarray(target_orientation, dtype=float) 
   
         # Roll error, pitch error, yaw error.
-        error = (
-            target_orientation
-            - state.orientation
-        )
+        error = (target_orientation - state.orientation)
  
         self.integral_error += error * dt
 
@@ -124,42 +78,16 @@ class OrientationPIDController:
         ki = self.gains[:, 1] 
         kd = self.gains[:, 2]
         
-        derivative_error = -np.asarray(
-        state.angular_velocity,
-        dtype=float
-        )
-        
- 
+        derivative_error = -np.asarray(state.angular_velocity, dtype = float)
          
- 
-        corrections = (
-            kp * error
-            + ki * self.integral_error
-            + kd * derivative_error
-        ) 
-
-        corrections = np.clip(
-            corrections,
-            -self.max_correction,
-            self.max_correction
-        ) 
- 
-        
+        corrections = (kp * error + ki * self.integral_error + kd * derivative_error) 
+        corrections = np.clip(corrections, -self.max_correction, self.max_correction) 
+  
         return corrections 
  
-    def calculate_motor_speed(
-        self,
-        base_motor_speeds,
-        target_orientation,
-        state,
-        dt
-    ): 
+    def calculate_motor_speed(self, base_motor_speeds, target_orientation, state, dt): 
  
-        corrections = self.calculate_corrections(
-            target_orientation=target_orientation,
-            state=state,
-            dt=dt
-        ) 
+        corrections = self.calculate_corrections(target_orientation = target_orientation, state = state, dt = dt) 
  
         roll_correction = corrections[0] 
         pitch_correction = corrections[1] 
@@ -175,11 +103,7 @@ class OrientationPIDController:
             base_speed - roll_correction - yaw_correction 
         ]) 
  
-        motor_speeds = np.clip( 
-            motor_speeds, 
-            0.0, 
-            self.max_motor_speed 
-        ) 
+        motor_speeds = np.clip( motor_speeds, 0.0, self.max_motor_speed) 
  
         return motor_speeds
 
@@ -192,13 +116,8 @@ class PositionPIDController:
         self.x_integral = 0.0
         self.y_integral = 0.0
 
-    def calculate_target_orientation(
-        self,
-        target_position,
-        target_yaw,
-        state,
-        dt
-    ):
+    def calculate_target_orientation(self, target_position, target_yaw, state, dt):
+        
         x_error = target_position[0] - state.position[0]
         y_error = target_position[1] - state.position[1]
 
@@ -215,39 +134,17 @@ class PositionPIDController:
         else:
             self.y_integral = 0.0
 
-# Prevent unlimited accumulation
+        # Prevent unlimited accumulation
         self.x_integral = np.clip(self.x_integral, -5.0, 5.0)
         self.y_integral = np.clip(self.y_integral, -5.0, 5.0)
 
         kp_x, ki_x, kd_x = self.x_gains
         kp_y, ki_y, kd_y = self.y_gains
 
-        pitch_command = (
-            kp_x * x_error
-            + ki_x * self.x_integral
-            - kd_x * state.velocity[0]
-        )
+        pitch_command = (kp_x * x_error + ki_x * self.x_integral - kd_x * state.velocity[0])
+        roll_command = -(kp_y * y_error + ki_y * self.y_integral - kd_y * state.velocity[1])
+        roll_command = np.clip(roll_command, -self.max_tilt, self.max_tilt)
 
-        roll_command = -(
-            kp_y * y_error
-            + ki_y * self.y_integral
-            - kd_y * state.velocity[1]
-        )
+        pitch_command = np.clip(pitch_command, -self.max_tilt, self.max_tilt)
 
-        roll_command = np.clip(
-            roll_command,
-            -self.max_tilt,
-            self.max_tilt
-        )
-
-        pitch_command = np.clip(
-            pitch_command,
-            -self.max_tilt,
-            self.max_tilt
-        )
-
-        return np.array([
-            roll_command,
-            pitch_command,
-            target_yaw
-        ])
+        return np.array([roll_command, pitch_command, target_yaw])
