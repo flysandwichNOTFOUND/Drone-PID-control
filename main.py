@@ -44,13 +44,13 @@ Y_POSITION_GAINS = np.array([0.056, 0.003, 0.11])
 # Target orientation in degrees
 
 
-TARGET_YAW = 0
+TARGET_YAW = 2.5
 TARGET_HEIGHT = 2.0
-TARGET_X = 1.0
-TARGET_Y = 1.0
+TARGET_X = 1.5
+TARGET_Y = -0.5
 
 MAX_ORIENTATION_CORRECTION = 20.0
-MAX_TILT_DEGREES = 5.0
+MAX_TILT_DEGREES = 15.0
 
 MAX_MOTOR_SPEED = np.sqrt(
     MAX_THRUST_PER_MOTOR
@@ -68,13 +68,15 @@ HOVER_SPEED = np.sqrt(
 # Change these values to test different wind conditions
 # ============================================================
 
-WIND_VELOCITY = np.array([
-    0,                            # x-direction wind
-    0,                            # y-direction wind
-    -0                            # vertical wind
-], dtype = float)
+WIND_MODE = "gust"  #"none", "constant", "gust"
+
+WIND_VELOCITY = np.array([0.5, 0.5, 0.0], dtype=float)
 
 WIND_FORCE_COEFFICIENT = 0.2
+
+GUST_START = 10.0
+GUST_DURATION = 2.0
+GUST_PERIOD = 6.0
 
 
 # ============================================================
@@ -90,56 +92,19 @@ SIMULATION_TIME = 40.0             # total simulation time
 # 5. CREATE THE OBJECTS
 # ============================================================
 def run_simulation():
-    drone = Drone(
-        total_mass=TOTAL_MASS,
-        arm_len=ARM_LENGTH,
-        max_thrust_per_motor=MAX_THRUST_PER_MOTOR,
-        moi=MOMENT_OF_INERTIA,
-        thrust_coe=THRUST_COEFFICIENT,
-        torque_coe=TORQUE_COEFFICIENT
-    )
 
+    drone = Drone(total_mass=TOTAL_MASS, arm_len=ARM_LENGTH, max_thrust_per_motor=MAX_THRUST_PER_MOTOR, moi=MOMENT_OF_INERTIA, thrust_coe=THRUST_COEFFICIENT, torque_coe=TORQUE_COEFFICIENT)
     state = DroneState()
 
-    hover_speed = np.sqrt(
-        TOTAL_MASS * abs(drone.gravity)
-        / (4.0 * THRUST_COEFFICIENT)
-    )
+    hover_speed = np.sqrt(TOTAL_MASS * abs(drone.gravity)/ (4.0 * THRUST_COEFFICIENT))
+    max_motor_speed = np.sqrt(MAX_THRUST_PER_MOTOR / THRUST_COEFFICIENT)
 
-    max_motor_speed = np.sqrt(
-        MAX_THRUST_PER_MOTOR
-        / THRUST_COEFFICIENT
-    )
+    #three controllers
+    height_controller = HeightPIDController(kp = KP, ki = KI, kd = KD, hover_speed = hover_speed, max_motor_speed = max_motor_speed)
+    orientation_controller = OrientationPIDController(roll_gains = ROLL_GAINS, pitch_gains = PITCH_GAINS, yaw_gains = YAW_GAINS, max_correction = MAX_ORIENTATION_CORRECTION, max_motor_speed = max_motor_speed)
+    position_controller = PositionPIDController(x_gains = X_POSITION_GAINS, y_gains = Y_POSITION_GAINS, max_tilt = np.radians(MAX_TILT_DEGREES))
 
-    height_controller = HeightPIDController(
-        kp=KP,
-        ki=KI,
-        kd=KD,
-        hover_speed=hover_speed,
-        max_motor_speed=max_motor_speed
-    )
-
-    orientation_controller = OrientationPIDController(
-        roll_gains=ROLL_GAINS,
-        pitch_gains=PITCH_GAINS,
-        yaw_gains=YAW_GAINS,
-        max_correction=MAX_ORIENTATION_CORRECTION,
-        max_motor_speed=max_motor_speed
-    )
-
-    position_controller = PositionPIDController(
-        x_gains = X_POSITION_GAINS,
-        y_gains = Y_POSITION_GAINS,
-        max_tilt = np.radians(MAX_TILT_DEGREES)
-    )
-
-    environment = BasicEnvironment(
-        wind_velocity=WIND_VELOCITY,
-        wind_force_coefficient=WIND_FORCE_COEFFICIENT
-    )
-
-    number_of_steps = int(SIMULATION_TIME / DT)
-
+    environment = BasicEnvironment(wind_mode = WIND_MODE, wind_velocity = WIND_VELOCITY, wind_force_coefficient = WIND_FORCE_COEFFICIENT, gust_start = GUST_START, gust_duration = GUST_DURATION, gust_period = GUST_PERIOD) 
     
     # Lists for recording simulation data
     time_history = []
@@ -152,10 +117,8 @@ def run_simulation():
     angular_velocity_history = []
     target_orientation_history = []
 
-    target_position = np.array(
-        [TARGET_X, TARGET_Y],
-        dtype=float
-    )
+    number_of_steps = int(SIMULATION_TIME / DT)
+    target_position = np.array([TARGET_X, TARGET_Y], dtype=float)
 
     for step in range(number_of_steps):
 
@@ -165,73 +128,25 @@ def run_simulation():
         #    position_controller.x_integral = 0.0
         #    position_controller.y_integral = 0.0
 
-        base_motor_speeds = (
-            height_controller.calculate_motor_speed(
-                target_height=TARGET_HEIGHT,
-                state=state,
-                dt=DT
-            )
-        )
+        base_motor_speeds = (height_controller.calculate_motor_speed(target_height = TARGET_HEIGHT,state = state,dt = DT))
+        base_motor_speeds = np.clip(base_motor_speeds, 0.0, max_motor_speed)
 
-        target_orientation = (
-            position_controller.calculate_target_orientation(
-                target_position=target_position,
-                target_yaw=np.radians(TARGET_YAW),
-                state=state,
-                dt=DT
-            )
-        )
+        target_orientation = (position_controller.calculate_target_orientation(target_position = target_position,target_yaw = np.radians(TARGET_YAW),state = state,dt = DT))
 
         # Compensate for vertical thrust lost when the drone tilts
         current_roll = state.orientation[0]
         current_pitch = state.orientation[1]
 
-        vertical_thrust_factor = (
-            np.cos(current_roll)
-            * np.cos(current_pitch)
-        )
-
-        # Prevent excessive compensation
-        vertical_thrust_factor = max(
-            vertical_thrust_factor,
-            0.5
-        )
+        vertical_thrust_factor = (np.cos(current_roll) * np.cos(current_pitch))
+        vertical_thrust_factor = max(vertical_thrust_factor, 0.5)
 
         # Motor thrust is proportional to motor speed squared
-        base_motor_speeds = (
-            base_motor_speeds
-            / np.sqrt(vertical_thrust_factor)
-        )
+        base_motor_speeds = (base_motor_speeds / np.sqrt(vertical_thrust_factor))
 
-        base_motor_speeds = np.clip(
-            base_motor_speeds,
-            0.0,
-            max_motor_speed
-        )
+        state.motor_speeds = (orientation_controller.calculate_motor_speed(base_motor_speeds = base_motor_speeds, target_orientation = target_orientation, state = state, dt = DT))
+        external_force = environment.calculate_wind_force(state = state, current_time = current_time)
 
-        state.motor_speeds = (
-            orientation_controller.calculate_motor_speed(
-                base_motor_speeds=base_motor_speeds,
-                target_orientation=target_orientation,
-                state=state,
-                dt=DT
-            )
-        )
-
-        external_force = environment.calculate_wind_force(state)
-
-        # No wind testing, for debug
-
-        #if current_time < 10.0:
-        #    external_force = np.zeros(3, dtype=float)
-        #else:
-        #    external_force = environment.calculate_wind_force(state)
-
-        drone.update_state(
-            state=state,
-            dt=DT,
-            external_force=external_force
-        )
+        drone.update_state(state = state, dt = DT, external_force = external_force)
 
         recorded_time = (step + 1) * DT
         height_error = TARGET_HEIGHT - state.position[2]
@@ -242,18 +157,9 @@ def run_simulation():
         position_history.append(state.position.copy())
         motor_speed_history.append(state.motor_speeds.copy())
         error_history.append(height_error)
-
-        orientation_history.append(
-            np.degrees(state.orientation.copy())
-        )
-
-        target_orientation_history.append(
-            np.degrees(target_orientation.copy())
-        )
-
-        angular_velocity_history.append(
-            state.angular_velocity.copy()
-        )
+        orientation_history.append(np.degrees(state.orientation.copy()))
+        target_orientation_history.append(np.degrees(target_orientation.copy()))
+        angular_velocity_history.append(state.angular_velocity.copy())
 
     # Put all recorded information into one dictionary
     simulation_data = {
@@ -278,43 +184,14 @@ def run_simulation():
 
     return state, simulation_data
 
-
 def plot_data(simulation_data):
-    time_history = np.asarray(
-        simulation_data["time"],
-        dtype=float
-    )
-
-    height_history = np.asarray(
-        simulation_data["height"],
-        dtype=float
-    )
-
-    velocity_history = np.asarray(
-        simulation_data["velocity"],
-        dtype=float
-    )
-
-    # NEW: read the complete XYZ position history
-    position_history = np.asarray(
-        simulation_data["position"],
-        dtype=float
-    )
-
-    motor_speed_history = np.asarray(
-        simulation_data["motor_speed"],
-        dtype=float
-    )
-
-    orientation_history = np.asarray(
-        simulation_data["orientation"],
-        dtype=float
-    )
-
-    target_orientation_history = np.asarray(
-        simulation_data["target_orientation"],
-        dtype=float
-    )
+    time_history = np.asarray(simulation_data["time"], dtype = float)
+    height_history = np.asarray(simulation_data["height"], dtype = float)
+    velocity_history = np.asarray(simulation_data["velocity"], dtype = float)
+    position_history = np.asarray(simulation_data["position"], dtype = float)
+    motor_speed_history = np.asarray(simulation_data["motor_speed"], dtype = float)
+    orientation_history = np.asarray(simulation_data["orientation"], dtype = float)
+    target_orientation_history = np.asarray(simulation_data["target_orientation"], dtype = float)
 
     target_height = simulation_data["target_height"]
     hover_speed = simulation_data["hover_speed"]
@@ -322,19 +199,13 @@ def plot_data(simulation_data):
     # If only one target [roll, pitch, yaw] was saved,
     # repeat it for every timestep.
     if target_orientation_history.ndim == 1:
-        target_orientation_history = np.tile(
-            target_orientation_history,
-            (len(time_history), 1)
-        )
+        target_orientation_history = np.tile(target_orientation_history,(len(time_history), 1))
 
     # Check that orientation data has the correct shape.
     if orientation_history.ndim != 2:
-        raise ValueError(
-            "orientation_history must contain one "
-            "[roll, pitch, yaw] array for every timestep."
-        )
+        raise ValueError("orientation_history must contain one [roll, pitch, yaw] array for every timestep.")
 
-    # CHANGED: 3 rows by 2 columns
+    # 3x2
     plt.figure(figsize=(12, 12))
 
     # ========================================================
@@ -519,7 +390,6 @@ def plot_data(simulation_data):
     )
 
     plt.show()
-
 
 if __name__ == "__main__":
     final_state, simulation_data = run_simulation()
