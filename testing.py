@@ -1,15 +1,8 @@
 import numpy as np
 
 class Drone:
-    def __init__(
-        self,
-        total_mass,
-        arm_len,
-        max_thrust_per_motor,
-        moi,
-        thrust_coe,
-        torque_coe
-    ):
+    def __init__(self, total_mass, arm_len, max_thrust_per_motor, moi, thrust_coe, torque_coe):
+
         self.total_mass = total_mass
         self.gravity = -9.81
         self.arm_len = arm_len
@@ -19,6 +12,7 @@ class Drone:
         self.torque_coe = torque_coe
 
     def motor_thrusts(self, state):
+
         raw_thrusts = self.thrust_coe * state.motor_speeds**2
 
         excess = np.maximum(raw_thrusts - self.max_thrust_per_motor, 0)
@@ -42,6 +36,7 @@ class Drone:
         
 
     def gravity_force(self):
+        
         return np.array([0, 0, self.total_mass * self.gravity])
 
     def net_force(self, state, external_force = None): #explain
@@ -50,7 +45,7 @@ class Drone:
         pitch = state.orientation[1]
         yaw = state.orientation[2]
 
-        if external_force == None:
+        if external_force is None:
             external_force = np.zeros(3, dtype = float)
         else:
             external_force = np.asarray(external_force, dtype = float)
@@ -99,12 +94,12 @@ class Drone:
 
         return torques
     
-    def linear_acceleration(self, state, external_force = None):
+    def linear_acceleration(self, state, external_force=None):
+
         if self.total_mass <= 0:
             raise ValueError("Total mass must be greater than zero.")
-        else:
-            linear_acceleration = (self.net_force(state, external_force = None) / self.total_mass) 
-            return linear_acceleration
+
+        return (self.net_force(state, external_force=external_force) / self.total_mass)
 
     def angular_acceleration(self, state):
         if np.any(self.moi <= 0):
@@ -113,20 +108,15 @@ class Drone:
         torque = self.net_torques(state)
         angular_momentum = self.moi * state.angular_velocity
 
-        gyroscopic_term = np.cross(
-            state.angular_velocity,
-            angular_momentum
-        )
+        gyroscopic_term = np.cross(state.angular_velocity, angular_momentum)
 
-        return (
-            torque - gyroscopic_term
-        ) / self.moi
+        return (torque - gyroscopic_term) / self.moi
 
     def update_state(self, state, dt, external_force = None):
         if dt <= 0:
             raise ValueError("Time step must be greater than zero.")
 
-        linear_acceleration = self.linear_acceleration(state, external_force)
+        linear_acceleration = self.linear_acceleration(state, external_force=external_force)
         angular_acceleration = self.angular_acceleration(state)
 
         state.velocity += linear_acceleration * dt
@@ -139,23 +129,15 @@ class Drone:
 class DroneState:
     def __init__(self):
 
-        # Position
         self.position = np.zeros(3, dtype=float)          # x, y, z
 
-        # Linear velocity
         self.velocity = np.zeros(3, dtype=float)          # vx, vy, vz
 
-        # Orientation
         self.orientation = np.zeros(3, dtype=float)       # roll, pitch, yaw
 
-        # Angular velocity
         self.angular_velocity = np.array([0,0,0], dtype=float)  # p, q, r
 
-        # Motor speeds
-        self.motor_speeds = np.array([0,0,0,0], dtype=float)      # w1, w2, w3, w4
-
-    def update_state():
-        pass  
+        self.motor_speeds = np.array([0,0,0,0], dtype=float)      # w1, w2, w3, w4 
 
     def copy(self):
         copied_state = DroneState()
