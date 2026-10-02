@@ -25,7 +25,7 @@ The current simulation uses `controllerV1.py`. An experimental backstepping cont
 - Orientation: $\boldsymbol{\eta} = [\phi,\theta,\psi]^T$ for roll, pitch, and yaw.
 - Thrust acts along the positive body $z$ axis.
 - All quantities use SI units; internal angles are in radians and motor speeds are in rad/s.
-- The rotational model treats each axis independently and integrates angular-state rates directly into Euler angles.
+- The rotational model includes gyroscopic coupling between axes. Angular velocities are integrated directly into Euler angles as a simplifying approximation.
 
 ### Core Equations
 
@@ -39,10 +39,12 @@ The current simulation uses `controllerV1.py`. An experimental backstepping cont
 | Translational dynamics | $m\ddot{\mathbf{p}} = R[0,0,\sum_i T_i]^T + [0,0,-mg]^T + \mathbf{F}_{\mathrm{wind}}$ |
 | Roll and pitch torque | $\tau_\phi = L(T_2 - T_4),\quad \tau_\theta = L(T_3 - T_1)$ |
 | Yaw torque with thrust limiting | $\tau_\psi = (k_\tau/k_T)(T_1 - T_2 + T_3 - T_4)$ |
-| Simplified angular acceleration | $\alpha_j = \tau_j/I_j$ |
+| Angular acceleration with gyroscopic coupling | $`\dot{\boldsymbol{\omega}} = I^{-1}\left(\boldsymbol{\tau} - \boldsymbol{\omega}\times(I\boldsymbol{\omega})\right)`$ |
 | Velocity-first integration | $`\mathbf{v}_{k+1} = \mathbf{v}_{k} + \mathbf{a}_{k}\Delta t,\quad \mathbf{p}_{k+1} = \mathbf{p}_{k} + \mathbf{v}_{k+1}\Delta t`$ |
 
-Here, $m$, $g$, $L$, and $I_j$ represent mass, gravitational acceleration magnitude, arm length, and axis inertia. The coefficients $k_T$, $k_\tau$, and $c_w$ describe motor thrust, yaw torque, and wind force. Angular motion uses the same velocity-first integration pattern.
+Here, $m$, $g$, $L$, and $I_j$ represent mass, gravitational acceleration magnitude, arm length, and axis inertia. The coefficients $k_T$, $k_\tau$, and $c_w$ describe motor thrust, yaw torque, and wind force.
+
+For rotational dynamics, $I = \mathrm{diag}(I_\phi,I_\theta,I_\psi)$ is the inertia matrix, $\boldsymbol{\omega}$ is angular velocity, and $\boldsymbol{\tau}$ is net torque. The cross-product term accounts for gyroscopic coupling. Angular motion uses the same velocity-first integration pattern.
 
 ## Control System
 
@@ -204,14 +206,16 @@ The plots compare no wind, constant wind, and gusting wind over approximately **
 | Target yaw | Approximately `2.5°` |
 | No-wind velocity | `[0.0, 0.0, 0.0]` m/s |
 | Reported wind setting | `[0.5, 0.5, 0.5]` m/s |
+| Gust start time | `10` s |
+| Gust duration | `2` s |
+| Gust period | `6` s |
 | Plotted motor-speed limit | `1000` rad/s |
 
-The wind setting uses decimal values of `0.5` on each axis. The gust waveform and its peak velocity are not specified.
+The wind setting uses decimal values of `0.5` on each axis. Gusts switch the configured wind velocity on for 2 seconds every 6 seconds, starting at 10 seconds. Wind velocity is zero before the first gust and between gusts.
 
 ### No Wind
 
 Altitude and horizontal position approach their targets after small initial overshoots. Roll and pitch return near zero, yaw approaches 2.5°, and motor speeds settle near hover speed.
-
 
 *Figure 1. Position, orientation, and motor response without wind.*
 
@@ -219,13 +223,11 @@ Altitude and horizontal position approach their targets after small initial over
 
 Altitude and x position show larger initial overshoots. Horizontal position recovers near the target, while a small altitude offset remains. Sustained roll and pitch adjustments oppose the wind.
 
-
 *Figure 2. Response under constant wind of `[0.5, 0.5, 0.5]` m/s.*
 
 ### Gusting Wind
 
 Repeated disturbances cause persistent position and altitude fluctuations. Orientation follows changing commands, and the response remains bounded over the displayed run.
-
 
 *Figure 3. Response under gusting wind.*
 
