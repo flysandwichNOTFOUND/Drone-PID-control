@@ -35,12 +35,12 @@ The current simulation uses `controllerV1.py`. An experimental backstepping cont
 | Level hover speed | $\omega_{\mathrm{hover}} = \sqrt{mg/(4k_T)}$ |
 | Maximum motor speed | $\omega_{\max} = \sqrt{T_{\max}/k_T}$ |
 | Body-to-world rotation | $R = R_z(\psi) R_y(\theta) R_x(\phi)$ |
-| Wind force | $\mathbf{F}_{\mathrm{wind}} = c_w(\mathbf{v}_{\mathrm{wind}} - \mathbf{v})$ |
+| Wind force | $`\mathbf{F}_{\mathrm{wind}} = c_w(\mathbf{v}_{\mathrm{wind}} - \mathbf{v})`$ |
 | Translational dynamics | $m\ddot{\mathbf{p}} = R[0,0,\sum_i T_i]^T + [0,0,-mg]^T + \mathbf{F}_{\mathrm{wind}}$ |
 | Roll and pitch torque | $\tau_\phi = L(T_2 - T_4),\quad \tau_\theta = L(T_3 - T_1)$ |
 | Yaw torque with thrust limiting | $\tau_\psi = (k_\tau/k_T)(T_1 - T_2 + T_3 - T_4)$ |
 | Simplified angular acceleration | $\alpha_j = \tau_j/I_j$ |
-| Velocity-first integration | $\mathbf{v}_{k+1} = \mathbf{v}_k + \mathbf{a}_k\Delta t,\quad \mathbf{p}_{k+1} = \mathbf{p}_k + \mathbf{v}_{k+1}\Delta t$ |
+| Velocity-first integration | $`\mathbf{v}_{k+1} = \mathbf{v}_{k} + \mathbf{a}_{k}\Delta t,\quad \mathbf{p}_{k+1} = \mathbf{p}_{k} + \mathbf{v}_{k+1}\Delta t`$ |
 
 Here, $m$, $g$, $L$, and $I_j$ represent mass, gravitational acceleration magnitude, arm length, and axis inertia. The coefficients $k_T$, $k_\tau$, and $c_w$ describe motor thrust, yaw torque, and wind force. Angular motion uses the same velocity-first integration pattern.
 
@@ -66,7 +66,7 @@ For each controlled state, $e_j = r_j - y_j$ is the tracking error and $S_j = \s
 | Altitude motor command | $\omega_b = \mathrm{clip}(\omega_{\mathrm{hover}} + u_z, 0, \omega_{\max})$ |
 | Horizontal position to pitch | $\theta_d = \mathrm{clip}(K_{P,x}e_x + K_{I,x}S_x - K_{D,x}v_x, -\theta_{\max}, \theta_{\max})$ |
 | Horizontal position to roll | $\phi_d = \mathrm{clip}(-(K_{P,y}e_y + K_{I,y}S_y - K_{D,y}v_y), -\phi_{\max}, \phi_{\max})$ |
-| Orientation correction | $c_j = \mathrm{clip}(K_{P,j}e_j + K_{I,j}S_j - K_{D,j}\dot{\eta}_j, -c_{\max}, c_{\max})$ |
+| Orientation correction | $`c_{j} = \mathrm{clip}(K_{P,j}e_{j} + K_{I,j}S_{j} - K_{D,j}\dot{\eta}_{j}, -c_{\max}, c_{\max})`$ |
 | Tilt compensation | $\omega_c = \mathrm{clip}(\omega_b/\sqrt{\max(\cos\phi\cos\theta, 0.5)}, 0, \omega_{\max})$ |
 
 Clipping limits a value between the specified bounds. The altitude loop starts with a zero derivative term; the position and orientation loops use measured velocity and angular rate for derivative damping.
