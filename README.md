@@ -26,45 +26,64 @@ Coordinates and Assumptions
 - Use SI units; internal angles are in radians and motor speeds are in rad/s.
 - The baseline uses independent angular acceleration for each axis and integrates angular-state rates directly into Euler angles.
   
-Core Equations and Calculation	Formula
-Motor thrust and limit	$T_i=\min(k_T\omega_i^2,T_{\max})$
-Level hover speed	$\omega_{\mathrm{hover}}=\sqrt{mg/(4k_T)}$
-Maximum motor speed	$\omega_{\max}=\sqrt{T_{\max}/k_T}$
-Body-to-world rotation	$R=R_z(\psi)R_y(\theta)R_x(\phi)$
-Wind force	$\mathbf{F}{\mathrm{wind}}=c_w(\mathbf{v}{\mathrm{wind}}-\mathbf{v})$
-Translational dynamics	$m\ddot{\mathbf{p}}=R[0,0,\sum_i T_i]^T+[0,0,-mg]^T+\mathbf{F}_{\mathrm{wind}}$
-Roll and pitch torque	$\tau_\phi=L(T_2-T_4),\quad \tau_\theta=L(T_3-T_1)$
-Yaw torque with thrust limiting	$\tau_\psi=(k_\tau/k_T)(T_1-T_2+T_3-T_4)$
-Simplified angular acceleration	$\alpha_j=\tau_j/I_j$
-Velocity-first integration	$\mathbf{v}_{k+1}=\mathbf{v}_k+\mathbf{a}k\Delta t,\quad \mathbf{p}{k+1}=\mathbf{p}k+\mathbf{v}{k+1}\Delta t$
+## Core Equations
 
+| Calculation | Formula |
+| --- | --- |
+| Motor thrust and limit | $T_i=\min(k_T\omega_i^2,T_{\max})$ |
+| Level hover speed | $\omega_{\mathrm{hover}}=\sqrt{mg/(4k_T)}$ |
+| Maximum motor speed | $\omega_{\max}=\sqrt{T_{\max}/k_T}$ |
+| Body-to-world rotation | $R=R_z(\psi)R_y(\theta)R_x(\phi)$ |
+| Wind force | $\mathbf{F}_{\mathrm{wind}}=c_w(\mathbf{v}_{\mathrm{wind}}-\mathbf{v})$ |
+| Translational dynamics | $m\ddot{\mathbf{p}}=R[0,0,\sum_i T_i]^T+[0,0,-mg]^T+\mathbf{F}_{\mathrm{wind}}$ |
+| Roll and pitch torque | $\tau_\phi=L(T_2-T_4),\quad \tau_\theta=L(T_3-T_1)$ |
+| Yaw torque with thrust limiting | $\tau_\psi=(k_\tau/k_T)(T_1-T_2+T_3-T_4)$ |
+| Simplified angular acceleration | $\alpha_j=\tau_j/I_j$ |
+| Velocity-first integration | $\mathbf{v}_{k+1}=\mathbf{v}_k+\mathbf{a}_k\Delta t,\quad \mathbf{p}_{k+1}=\mathbf{p}_k+\mathbf{v}_{k+1}\Delta t$ |
 
-Here, $m$ is mass, $g$ is gravitational acceleration magnitude, $L$ is arm length, $I_j$ is axis inertia, $k_T$ is the thrust coefficient, $k_\tau$ is the yaw torque coefficient, and $c_w$ is the wind-force coefficient. The angular state follows the same velocity-first integration pattern.
-<!-- Expand parameter values, motor numbering, and model assumptions. -->
+Here, $m$ is mass, $g$ is gravitational acceleration magnitude,
+$L$ is arm length, $I_j$ is axis inertia, $k_T$ is the thrust
+coefficient, $k_\tau$ is the yaw torque coefficient, and $c_w$
+is the wind-force coefficient.
 
-Control Equations
-Let $e_j=r_j-y_j$ denote target minus actual state, and let $S_j$ denote the accumulated error $\sum e_j\Delta t$.
-Controller component	Formula
-Altitude PID	$u_{z,k}=K_{P,z}e_{z,k}+K_{I,z}S_{z,k}+K_{D,z}(e_{z,k}-e_{z,k-1})/\Delta t$
-Altitude motor command	$\omega_b=\operatorname{clip}(\omega_{\mathrm{hover}}+u_z,0,\omega_{\max})$
-Horizontal position to pitch	$\theta_d=\operatorname{clip}(K_{P,x}e_x+K_{I,x}S_x-K_{D,x}v_x,-\theta_{\max},\theta_{\max})$
-Horizontal position to roll	$\phi_d=\operatorname{clip}(-(K_{P,y}e_y+K_{I,y}S_y-K_{D,y}v_y),-\phi_{\max},\phi_{\max})$
-Orientation correction	$c_j=\operatorname{clip}(K_{P,j}e_j+K_{I,j}S_j-K_{D,j}\dot{\eta}j,-c{\max},c_{\max})$
-Tilt compensation	$\omega_c=\operatorname{clip}(\omega_b/\sqrt{\max(\cos\phi\cos\theta,0.5)},0,\omega_{\max})$
+The angular state follows the same velocity-first integration
+pattern. The baseline rotational model treats each axis independently.
 
+## Control Equations
 
-The altitude controller uses zero derivative correction on its first step. Position and orientation controllers use measured velocity or angular rate for derivative damping.
+Let $e_j=r_j-y_j$ denote target minus actual state, and let
+$S_j=\sum e_j\Delta t$ denote accumulated error.
 
-Motor Mixing
-Before clipping each command to $0,\omega_{\max}$:
-\[
+| Controller component | Formula |
+| --- | --- |
+| Altitude PID | $u_{z,k}=K_{P,z}e_{z,k}+K_{I,z}S_{z,k}+K_{D,z}(e_{z,k}-e_{z,k-1})/\Delta t$ |
+| Altitude motor command | $\omega_b=\mathrm{clip}(\omega_{\mathrm{hover}}+u_z,0,\omega_{\max})$ |
+| Horizontal position to pitch | $\theta_d=\mathrm{clip}(K_{P,x}e_x+K_{I,x}S_x-K_{D,x}v_x,-\theta_{\max},\theta_{\max})$ |
+| Horizontal position to roll | $\phi_d=\mathrm{clip}(-(K_{P,y}e_y+K_{I,y}S_y-K_{D,y}v_y),-\phi_{\max},\phi_{\max})$ |
+| Orientation correction | $c_j=\mathrm{clip}(K_{P,j}e_j+K_{I,j}S_j-K_{D,j}\dot{\eta}_j,-c_{\max},c_{\max})$ |
+| Tilt compensation | $\omega_c=\mathrm{clip}(\omega_b/\sqrt{\max(\cos\phi\cos\theta,0.5)},0,\omega_{\max})$ |
+
+The clipping function limits a value between its lower and upper bounds.
+
+The altitude controller uses zero derivative correction on its first
+step. Position and orientation controllers use measured velocity
+or angular rate for derivative damping.
+
+### Motor Mixing
+
+The compensated base speed and orientation corrections are combined
+into four motor commands:
+
+$$
 \begin{aligned}
-\omega_1&=\omega_c-c_\theta+c_\psi\\
-\omega_2&=\omega_c+c_\phi-c_\psi\\
-\omega_3&=\omega_c+c_\theta+c_\psi\\
-\omega_4&=\omega_c-c_\phi-c_\psi
+\omega_1 &= \omega_c-c_\theta+c_\psi \\
+\omega_2 &= \omega_c+c_\phi-c_\psi \\
+\omega_3 &= \omega_c+c_\theta+c_\psi \\
+\omega_4 &= \omega_c-c_\phi-c_\psi
 \end{aligned}
-\]
+$$
+
+Each final motor command is clipped to $[0,\omega_{\max}]$.
 
 Controller loops
 
