@@ -1,161 +1,241 @@
-Drone Dynamics and Control Simulator
+# Drone Dynamics and Control Simulator
 
-A Python simulation project for studying quadrotor dynamics, feedback control, and flight under wind disturbances.
+A Python quadrotor simulator for studying flight dynamics, PID control, and wind disturbances.
 
-Overview
+## Overview
 
-The project develops two connected components:
+The simulator models a drone’s motion and uses feedback control to track a target position and heading. It combines altitude control with cascaded horizontal-position and orientation control, then mixes their outputs into four motor commands.
 
-1. Drone model and control system: model the drone's physical response and regulate altitude, orientation, and horizontal position using a cascaded position and orientation PID control, with a separate altitude PID loop.
-2. Navigation simulation and environment: provide wind disturbances and support the development of point-to-point flight.
-The current prototype uses PID control. Note that point to point flight component is still in prototyping stage.
+The current simulation uses `controllerV1.py`. An experimental backstepping controller in `controllerV2.py` is available for future integration.
 
-Features
-- Three dimensional position, velocity, orientation, and angular-state simulation.
+## Features
+
+- Three-dimensional position, velocity, orientation, and angular-state simulation.
 - Motor thrust, gravity, and roll, pitch, and yaw torque calculations.
-- PID control of altitude, orientation, and horizontal position.
+- PID control of altitude, horizontal position, and orientation.
 - Tilt compensation, motor-speed limits, and commanded tilt limits.
-- Configurable wind velocity with a linear relative-air-velocity force model.
+- Wind forces based on relative air velocity.
 - Plots of altitude, vertical velocity, motor speeds, orientation, and horizontal position.
 
-Physics Model
-Coordinates and Assumptions
-- Position: $\mathbf{p}=[x,y,z]^T$, with world $z$ upward.
-- Orientation: $\boldsymbol{\eta}=[\phi,\theta,\psi]^T$ for roll, pitch, and yaw.
+## Physics Model
+
+### Coordinates and Assumptions
+
+- Position: $\mathbf{p} = [x,y,z]^T$, with world $z$ pointing upward.
+- Orientation: $\boldsymbol{\eta} = [\phi,\theta,\psi]^T$ for roll, pitch, and yaw.
 - Thrust acts along the positive body $z$ axis.
-- Use SI units; internal angles are in radians and motor speeds are in rad/s.
-- The baseline uses independent angular acceleration for each axis and integrates angular-state rates directly into Euler angles.
-  
-## Core Equations
+- All quantities use SI units; internal angles are in radians and motor speeds are in rad/s.
+- The rotational model treats each axis independently and integrates angular-state rates directly into Euler angles.
+
+### Core Equations
 
 | Calculation | Formula |
 | --- | --- |
-| Motor thrust and limit | $T_i=\min(k_T\omega_i^2,T_{\max})$ |
-| Level hover speed | $\omega_{\mathrm{hover}}=\sqrt{mg/(4k_T)}$ |
-| Maximum motor speed | $\omega_{\max}=\sqrt{T_{\max}/k_T}$ |
-| Body-to-world rotation | $R=R_z(\psi)R_y(\theta)R_x(\phi)$ |
-| Wind force | $\mathbf{F}_{\mathrm{wind}}=c_w(\mathbf{v}_{\mathrm{wind}}-\mathbf{v})$ |
-| Translational dynamics | $m\ddot{\mathbf{p}}=R[0,0,\sum_i T_i]^T+[0,0,-mg]^T+\mathbf{F}_{\mathrm{wind}}$ |
-| Roll and pitch torque | $\tau_\phi=L(T_2-T_4),\quad \tau_\theta=L(T_3-T_1)$ |
-| Yaw torque with thrust limiting | $\tau_\psi=(k_\tau/k_T)(T_1-T_2+T_3-T_4)$ |
-| Simplified angular acceleration | $\alpha_j=\tau_j/I_j$ |
-| Velocity-first integration | $\mathbf{v}_{k+1}=\mathbf{v}_k+\mathbf{a}_k\Delta t,\quad \mathbf{p}_{k+1}=\mathbf{p}_k+\mathbf{v}_{k+1}\Delta t$ |
+| Motor thrust and limit | $T_i = \min(k_T\omega_i^2, T_{\max})$ |
+| Level hover speed | $\omega_{\mathrm{hover}} = \sqrt{mg/(4k_T)}$ |
+| Maximum motor speed | $\omega_{\max} = \sqrt{T_{\max}/k_T}$ |
+| Body-to-world rotation | $R = R_z(\psi) R_y(\theta) R_x(\phi)$ |
+| Wind force | $\mathbf{F}_{\mathrm{wind}} = c_w(\mathbf{v}_{\mathrm{wind}} - \mathbf{v})$ |
+| Translational dynamics | $m\ddot{\mathbf{p}} = R[0,0,\sum_i T_i]^T + [0,0,-mg]^T + \mathbf{F}_{\mathrm{wind}}$ |
+| Roll and pitch torque | $\tau_\phi = L(T_2 - T_4),\quad \tau_\theta = L(T_3 - T_1)$ |
+| Yaw torque with thrust limiting | $\tau_\psi = (k_\tau/k_T)(T_1 - T_2 + T_3 - T_4)$ |
+| Simplified angular acceleration | $\alpha_j = \tau_j/I_j$ |
+| Velocity-first integration | $\mathbf{v}_{k+1} = \mathbf{v}_k + \mathbf{a}_k\Delta t,\quad \mathbf{p}_{k+1} = \mathbf{p}_k + \mathbf{v}_{k+1}\Delta t$ |
 
-Here, $m$ is mass, $g$ is gravitational acceleration magnitude,
-$L$ is arm length, $I_j$ is axis inertia, $k_T$ is the thrust
-coefficient, $k_\tau$ is the yaw torque coefficient, and $c_w$
-is the wind-force coefficient.
+Here, $m$, $g$, $L$, and $I_j$ represent mass, gravitational acceleration magnitude, arm length, and axis inertia. The coefficients $k_T$, $k_\tau$, and $c_w$ describe motor thrust, yaw torque, and wind force. Angular motion uses the same velocity-first integration pattern.
 
-The angular state follows the same velocity-first integration
-pattern. The baseline rotational model treats each axis independently.
+## Control System
 
-## Control Equations
+### Controller Loops
 
-Let $e_j=r_j-y_j$ denote target minus actual state, and let
-$S_j=\sum e_j\Delta t$ denote accumulated error.
+The horizontal-position and orientation controllers form a cascade:
+
+- **Position loop:** converts x and y position errors into desired pitch and roll angles.
+- **Orientation loop:** tracks the desired roll, pitch, and yaw using motor-speed corrections.
+- **Altitude loop:** independently adjusts the common motor speed to track the height target.
+
+Tilt compensation increases the base motor speed during tilted flight. Motor mixing combines this base speed with the orientation corrections. All controllers update at each simulation step.
+
+### Control Equations
+
+For each controlled state, $e_j = r_j - y_j$ is the tracking error and $S_j = \sum e_j\Delta t$ is the accumulated error.
 
 | Controller component | Formula |
 | --- | --- |
-| Altitude PID | $u_{z,k}=K_{P,z}e_{z,k}+K_{I,z}S_{z,k}+K_{D,z}(e_{z,k}-e_{z,k-1})/\Delta t$ |
-| Altitude motor command | $\omega_b=\mathrm{clip}(\omega_{\mathrm{hover}}+u_z,0,\omega_{\max})$ |
-| Horizontal position to pitch | $\theta_d=\mathrm{clip}(K_{P,x}e_x+K_{I,x}S_x-K_{D,x}v_x,-\theta_{\max},\theta_{\max})$ |
-| Horizontal position to roll | $\phi_d=\mathrm{clip}(-(K_{P,y}e_y+K_{I,y}S_y-K_{D,y}v_y),-\phi_{\max},\phi_{\max})$ |
-| Orientation correction | $c_j=\mathrm{clip}(K_{P,j}e_j+K_{I,j}S_j-K_{D,j}\dot{\eta}_j,-c_{\max},c_{\max})$ |
-| Tilt compensation | $\omega_c=\mathrm{clip}(\omega_b/\sqrt{\max(\cos\phi\cos\theta,0.5)},0,\omega_{\max})$ |
+| Altitude PID | $u_{z,k} = K_{P,z}e_{z,k} + K_{I,z}S_{z,k} + K_{D,z}(e_{z,k} - e_{z,k-1})/\Delta t$ |
+| Altitude motor command | $\omega_b = \mathrm{clip}(\omega_{\mathrm{hover}} + u_z, 0, \omega_{\max})$ |
+| Horizontal position to pitch | $\theta_d = \mathrm{clip}(K_{P,x}e_x + K_{I,x}S_x - K_{D,x}v_x, -\theta_{\max}, \theta_{\max})$ |
+| Horizontal position to roll | $\phi_d = \mathrm{clip}(-(K_{P,y}e_y + K_{I,y}S_y - K_{D,y}v_y), -\phi_{\max}, \phi_{\max})$ |
+| Orientation correction | $c_j = \mathrm{clip}(K_{P,j}e_j + K_{I,j}S_j - K_{D,j}\dot{\eta}_j, -c_{\max}, c_{\max})$ |
+| Tilt compensation | $\omega_c = \mathrm{clip}(\omega_b/\sqrt{\max(\cos\phi\cos\theta, 0.5)}, 0, \omega_{\max})$ |
 
-The clipping function limits a value between its lower and upper bounds.
-
-The altitude controller uses zero derivative correction on its first
-step. Position and orientation controllers use measured velocity
-or angular rate for derivative damping.
+Clipping limits a value between the specified bounds. The altitude loop starts with a zero derivative term; the position and orientation loops use measured velocity and angular rate for derivative damping.
 
 ### Motor Mixing
 
-The compensated base speed and orientation corrections are combined
-into four motor commands:
+The compensated base speed and orientation corrections produce four motor commands:
 
 $$
 \begin{aligned}
-\omega_1 &= \omega_c-c_\theta+c_\psi \\
-\omega_2 &= \omega_c+c_\phi-c_\psi \\
-\omega_3 &= \omega_c+c_\theta+c_\psi \\
-\omega_4 &= \omega_c-c_\phi-c_\psi
+  \omega_1 &= \omega_c - c_\theta + c_\psi \\
+  \omega_2 &= \omega_c + c_\phi - c_\psi \\
+  \omega_3 &= \omega_c + c_\theta + c_\psi \\
+  \omega_4 &= \omega_c - c_\phi - c_\psi
 \end{aligned}
 $$
 
-Each final motor command is clipped to $[0,\omega_{\max}]$.
+Each command is then clipped to $[0,\omega_{\max}]$.
 
-Controller loops
+## Project Structure
 
-Desired roll and pitchBase motor speedFour motor commandsUpdated state
+| File | Purpose |
+| --- | --- |
+| `main.py` | Simulation entry point, parameters, controller updates, data recording, and plotting. |
+| `testing.py` | Core `Drone` dynamics and `DroneState` classes used by the simulator. |
+| `controllerV1.py` | Altitude, horizontal-position, and orientation PID controllers. |
+| `environment.py` | Wind configuration and external-force calculations. |
+| `controllerV2.py` | Experimental backstepping controller awaiting integration. |
+| `auto_tune_pid.py` | Optional utility for tuning PID gains through separate simulation trials. |
+| `README.md` | Project documentation. |
+| `results/` | Plots used in the results section. |
 
+**`auto_tune_PID.py` is only a PID tuning tool. It is not part of the normal simulation execution path.** The supplied script is named `auto_tune_pid.py`; use the capitalization present in your repository. Recommended gains must be applied manually in `main.py`.
 
+## Installation
 
+### Requirements
 
-1. Altitude loop — controls height
-   It compares the target altitude with state.position[2]:
-   \[
-   e_z=z_{\text{target}}-z
-   \]
-   The PID correction adjusts a common base motor speed around the hover speed. A positive height error generally increases this command. Tilt compensation then increases the base speed to compensate for the reduced vertical thrust when the drone tilts.
-   
-2. Position loop — decides the required tilt
-   It compares the target x/y coordinates with the current horizontal position:
-   \[
-   e_x=x_{\text{target}}-x,\qquad e_y=y_{\text{target}}-y
-   \]
-   It converts these errors into desired pitch and roll. Tilting redirects some thrust horizontally, allowing the drone to move toward its target. Velocity feedback damps that movement as the drone approaches the target, and tilt limits constrain the commands.
-   
-4. Orientation loop — achieves the requested tilt and heading
-   It compares the desired roll, pitch, and yaw with the actual angles. Angle-error feedback produces corrections, while angular-rate feedback damps rotation.
-   These corrections are mixed with the altitude loop’s base motor speed to produce four motor commands. For example, a positive pitch correction increases motor 3’s speed and decreases motor 1’s speed, creating pitch torque.
-After applying those commands, Drone.update_state() calculates the drone’s motion under thrust, gravity, and wind. That updated state feeds the next control cycle, completing the feedback loops.
-Across the controllers, \(K_P\) responds to current error, \(K_I\) accumulates persistent error, and \(K_D\) provides damping. Your altitude loop uses the change in error for its derivative term; the position and orientation loops use measured velocities.
-
-With DT = 0.01, all three controllers update 100 times per second of simulated time.
-
-Project Code Structure
-
-File Role
-
-main.py	Simulation entry point; parameters, controller calls, state updates, data recording, and plotting.
-testing.py	Core Drone dynamics and DroneState classes; this is part of the simulator despite its filename.
-controllerV1.py	Altitude, orientation, and horizontal-position PID controllers.
-environment.py	Wind configuration and external-force calculation.
-controllerV2.py	Experimental backstepping controller core; currently separate from the simulation execution path.
-auto_tune_pid.py	Optional development utility for tuning PID gains through separate simulation trials.
-README.md	Project overview and documentation.
-
-
-PID Tuning Utility
-
-auto_tune_PID.py is only a development tool for finding recommended $K_P$, $K_I$, and $K_D$ values. It is not part of the simulator's normal execution path and does not control the drone during a normal simulation run.
-Selected gains are configured in the simulator before running main.py. The available script is named auto_tune_pid.py;
-
-Requirements
-- Anaconda Distribution, which provides Conda for environment management.
-- Python 3.10.21 
+- [Anaconda Distribution](https://www.anaconda.com/download).
+- Python **3.10.21**.
 - NumPy and Matplotlib.
-- 
-Testing conditions
-- Controller: V1 PID controller, with cascaded position and orientation loops and a separate altitude loop.
-- Simulation duration: approximately 40 seconds.
-- Target position: x = 1.5 m, y = −0.5 m, z = 2.0 m.
-- Target yaw: approximately 2.5°.
-- Initial position: approximately [0, 0, 0] m, as shown in the plots.
-- Wind cases: no wind, constant wind, and gusting wind.
-- Reported wind setting: [0.5, 0.5, 0.5] m/s, interpreting your decimal commas.
-- Maximum motor speed: 1,000 rad/s.
-- The screenshots do not specify the PID gains, time step, or gust waveform. Numerical observations below are approximate.
-  
-Validation and Results
 
-No wind: Altitude and horizontal position approach their targets after small initial overshoots. Roll and pitch return near zero, yaw approaches 2.5°, and motor speeds settle near hover speed.
+NumPy and Matplotlib are the only external Python dependencies. The tuning utility also uses `json` and `pathlib`, which are included with Python.
 
-Constant wind: Altitude and x position show larger initial overshoots. Horizontal position recovers near the target, while a small altitude offset remains. Sustained roll and pitch adjustments oppose the wind.
+### Create the Environment
 
-Gusting wind: Repeated disturbances cause persistent position and altitude fluctuations. Orientation follows changing commands, and the response remains bounded over the displayed run.
+Open **Anaconda Prompt** on Windows, or a terminal with Conda available on macOS or Linux:
 
-Future Development
--reduce horizontal position osculation due gust wind
--develop a fully functional point-to-point navigation system
+```bash
+conda create --name drone-sim python=3.10.21 numpy matplotlib
+conda activate drone-sim
+```
+
+If the environment already exists:
+
+```bash
+conda activate drone-sim
+conda install python=3.10.21 numpy matplotlib
+```
+
+### Verify the Setup
+
+Check the active environment, Python version, interpreter path, and dependencies:
+
+```bash
+conda info --envs
+python --version
+python -c "import sys; print(sys.executable)"
+python -c "import numpy, matplotlib; print('NumPy:', numpy.__version__); print('Matplotlib:', matplotlib.__version__)"
+```
+
+The active environment should be `drone-sim`, the Python version should be `3.10.21`, and the interpreter path should point inside that environment.
+
+From the project directory, verify the local imports:
+
+```bash
+python -c "from testing import Drone, DroneState; from controllerV1 import HeightPIDController, OrientationPIDController, PositionPIDController; from environment import BasicEnvironment; print('Project imports OK')"
+```
+
+Keep `main.py`, `testing.py`, `controllerV1.py`, and `environment.py` in the same directory with these exact filenames. A successful check prints `Project imports OK`.
+
+### VS Code Setup
+
+1. Open the project folder with the Python extension installed.
+2. Open the Command Palette and choose **Python: Select Interpreter**.
+3. Select the `drone-sim` interpreter running Python **3.10.21**.
+4. Open a new terminal and activate the environment if needed.
+
+## Usage
+
+### Run the Simulation
+
+With `drone-sim` active, run this command from the project directory:
+
+```bash
+python main.py
+```
+
+The simulation prints the final drone state and opens plots of altitude, vertical velocity, motor speeds, orientation, and horizontal position.
+
+### Configure a Run
+
+Edit the settings near the top of `main.py`:
+
+| Setting | Parameters |
+| --- | --- |
+| Drone properties | `TOTAL_MASS`, `ARM_LENGTH`, `MOMENT_OF_INERTIA`, `MAX_THRUST_PER_MOTOR`, `THRUST_COEFFICIENT`, `TORQUE_COEFFICIENT` |
+| Target position and heading | `TARGET_X`, `TARGET_Y`, `TARGET_HEIGHT`, `TARGET_YAW` |
+| Altitude gains | `KP`, `KI`, `KD` |
+| Orientation gains | `ROLL_GAINS`, `PITCH_GAINS`, `YAW_GAINS` |
+| Position gains | `X_POSITION_GAINS`, `Y_POSITION_GAINS` |
+| Controller limits | `MAX_TILT_DEGREES`, `MAX_ORIENTATION_CORRECTION` |
+| Wind | `WIND_VELOCITY`, `WIND_FORCE_COEFFICIENT` |
+| Simulation timing | `DT`, `SIMULATION_TIME` |
+
+### Tune PID Gains (Optional)
+
+Run the tuning tool separately:
+
+```bash
+python auto_tune_pid.py
+```
+
+Use `auto_tune_PID.py` if that is your repository’s filename. The tool writes `optimized_pid_gains.json` and `auto_tune_results.png`. Copy the selected gains into `main.py`, then rerun the simulation.
+
+## Results
+
+### Test Conditions
+
+The plots compare no wind, constant wind, and gusting wind over approximately **40 seconds**.
+
+| Setting | Value |
+| --- | --- |
+| Target position `[x, y, z]` | `[1.5, -0.5, 2.0]` m |
+| Target yaw | Approximately `2.5°` |
+| No-wind velocity | `[0.0, 0.0, 0.0]` m/s |
+| Reported wind setting | `[0.5, 0.5, 0.5]` m/s |
+| Plotted motor-speed limit | `1000` rad/s |
+
+The wind setting uses decimal values of `0.5` on each axis. The gust waveform and its peak velocity are not specified.
+
+### No Wind
+
+Altitude and horizontal position approach their targets after small initial overshoots. Roll and pitch return near zero, yaw approaches 2.5°, and motor speeds settle near hover speed.
+
+![No-wind simulation response](results/no_wind.png)
+
+*Figure 1. Position, orientation, and motor response without wind.*
+
+### Constant Wind
+
+Altitude and x position show larger initial overshoots. Horizontal position recovers near the target, while a small altitude offset remains. Sustained roll and pitch adjustments oppose the wind.
+
+![Constant-wind simulation response](results/constant_wind.png)
+
+*Figure 2. Response under constant wind of `[0.5, 0.5, 0.5]` m/s.*
+
+### Gusting Wind
+
+Repeated disturbances cause persistent position and altitude fluctuations. Orientation follows changing commands, and the response remains bounded over the displayed run.
+
+![Gusting-wind simulation response](results/gust_wind.png)
+
+*Figure 3. Response under gusting wind.*
+
+No motor-speed saturation is visible in any of the three plots. These observations are based on plot inspection; exact tracking errors and settling times require recorded simulation data. Reproducible comparisons should also record the gains, time step, initial state, and gust waveform.
+
+## Future Development
+
+- Integrate the experimental backstepping controller.
+- Extend the simulation to point-to-point navigation.
+- Evaluate gust tracking using recorded error metrics.
