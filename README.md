@@ -212,7 +212,6 @@ The wind setting uses decimal values of `0.5` on each axis. The gust waveform an
 
 Altitude and horizontal position approach their targets after small initial overshoots. Roll and pitch return near zero, yaw approaches 2.5°, and motor speeds settle near hover speed.
 
-![No-wind simulation response](results/no_wind.png)
 
 *Figure 1. Position, orientation, and motor response without wind.*
 
@@ -220,7 +219,6 @@ Altitude and horizontal position approach their targets after small initial over
 
 Altitude and x position show larger initial overshoots. Horizontal position recovers near the target, while a small altitude offset remains. Sustained roll and pitch adjustments oppose the wind.
 
-![Constant-wind simulation response](results/constant_wind.png)
 
 *Figure 2. Response under constant wind of `[0.5, 0.5, 0.5]` m/s.*
 
@@ -228,7 +226,6 @@ Altitude and x position show larger initial overshoots. Horizontal position reco
 
 Repeated disturbances cause persistent position and altitude fluctuations. Orientation follows changing commands, and the response remains bounded over the displayed run.
 
-![Gusting-wind simulation response](results/gust_wind.png)
 
 *Figure 3. Response under gusting wind.*
 
