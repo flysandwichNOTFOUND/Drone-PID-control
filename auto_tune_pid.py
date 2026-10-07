@@ -1,5 +1,23 @@
-"""
-This file is only a tool for PID tuning and will be no longer in use once PID is optimized
+"""Automatically tune the PID controllers used by the drone prototype.
+
+Place this file beside:
+    testing.py
+    controllerV1.py
+
+Run:
+    python auto_tune_pid.py
+
+The tuner works in stages:
+    1. Height
+    2. Roll
+    3. Pitch
+    4. Yaw
+    5. X position
+    6. Y position
+    7. Combined X/Y validation
+
+It does not modify main.py or controllerV1.py. Results are written to
+optimized_pid_gains.json and auto_tune_results.png.
 """
 
 import json

@@ -10,7 +10,7 @@ class HeightPIDController:
         self.max_motor_speed = max_motor_speed 
  
         self.integral_error = 0.0 
-        self.previous_error = None 
+      
  
     def calculate_motor_speed(self, target_height, state, dt): 
 
@@ -27,10 +27,7 @@ class HeightPIDController:
 
         self.integral_error = np.clip(self.integral_error, -5.0, 5.0)
 
-        if self.previous_error is None: 
-            derivative_error = 0.0 
-        else: 
-            derivative_error = (error - self.previous_error) / dt 
+        derivative_error = -state.velocity[2]
  
         correction = (self.kp * error  + self.ki * self.integral_error  + self.kd * derivative_error) 
  
@@ -38,7 +35,7 @@ class HeightPIDController:
         motor_speeds = np.full(4, motor_speed, dtype=float) 
         motor_speeds = np.clip(motor_speeds, 0.0, self.max_motor_speed) 
  
-        self.previous_error = error 
+    
  
         return motor_speeds 
  
