@@ -1,11 +1,13 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 from testing import Drone, DroneState
 from controllerV1 import HeightPIDController, OrientationPIDController, PositionPIDController
 from environment import BasicEnvironment
-from navigation import Navigation
+from navigation import PathFollower
 from routeplanner import RoutePlanner
+from validation import positive, vector
+from terrain import FlatTerrain, HillTerrain, SlopedTerrain, LandscapeTerrain
+from landing import LandingController
 
 
 # ============================================================
@@ -33,15 +35,15 @@ GRAVITY = 9.81
 # Change these values to tune the PID controller
 # ============================================================
 #height PID
-KP = 49.967
-KI = 1
-KD = 45.189
+KP = 211.092059550
+KI = 0.223363309
+KD = 93.863981577
 # Orientation PID gains: [Kp, Ki, Kd]
-ROLL_GAINS = np.array([13.893, 0,  6.789])
-PITCH_GAINS = np.array([13.757, 0.026, 6.772])
-YAW_GAINS = np.array([15.158408 , 0.006  ,  21.907])
-X_POSITION_GAINS = np.array([0.056, 0.003, 0.11])
-Y_POSITION_GAINS = np.array([0.056, 0.003, 0.11])
+ROLL_GAINS = np.array([50.679433130, 0.026414318, 14.574450033])
+PITCH_GAINS = np.array([50.571938943, 0.060850500, 14.352389900])
+YAW_GAINS = np.array([37.650316822, 0.048992121, 34.053486350])
+X_POSITION_GAINS = np.array([0.301072977, 0.000751421, 0.297699224])
+Y_POSITION_GAINS = np.array([0.303979658, 0.004076894, 0.309451213])
 
 # Target orientation in degrees
 
@@ -49,28 +51,48 @@ Y_POSITION_GAINS = np.array([0.056, 0.003, 0.11])
 TARGET_YAW = 0
 
 TARGET_HEIGHT = 2.0
-TARGET_X = 1.5
-TARGET_Y = -0.5
+TARGET_X = 9
+TARGET_Y = -9
 
 MAX_ORIENTATION_CORRECTION = 20.0
 MAX_TILT_DEGREES = 15.0
+MAX_TILT_RATE_DEGREES = 10.0       # roll/pitch command change per second
+TILT_SMOOTHING_TIME = 0.03         # seconds; zero disables smoothing
 
 # Route planning and waypoint arrival settings
 GROUND_HEIGHT = 0.0
 MINIMUM_CLEARANCE = 2.0
 WAYPOINT_SPACING = 1.0
+MAX_FLIGHT_SPEED = 1.2
+MAX_FLIGHT_ACCELERATION = 0.8
+MAX_FLIGHT_JERK = 1.0             # m/s cubed; controls acceleration transitions
+MAX_CLIMB_RATE = 0.8
+MAX_DESCENT_RATE = 0.4
+PATH_LOOKAHEAD_DISTANCE = 1.0
 ARRIVAL_TOLERANCE = 0.2
 SPEED_TOLERANCE = 0.15
-INCLUDE_LANDING = False
+INCLUDE_LANDING = True
+LANDING_DESCENT_SPEED = 0.4
+LANDING_FLARE_SPEED = 0.12
+LANDING_FLARE_HEIGHT = 0.5
+MAX_LANDING_SLOPE_DEGREES = 20.0
+
+# Physical terrain shared by the route planner, landing, and graphs.
+TERRAIN_MODE = "landscape"  # "flat", "hill", "slope", "landscape"
+TERRAIN_SEED = 17
+HILL_CENTER = np.array([5.0, 4.0])
+HILL_HEIGHT = 3.0
+HILL_WIDTH = 1.6
+TERRAIN_SLOPE = np.array([0.1, 0.0])
 
 MAX_MOTOR_SPEED = np.sqrt(
     MAX_THRUST_PER_MOTOR
-    / THRUST_COEFFICIENT
+ / THRUST_COEFFICIENT
 )
 
 HOVER_SPEED = np.sqrt(
     TOTAL_MASS * GRAVITY
-    / (4 * THRUST_COEFFICIENT)
+ / (4 * THRUST_COEFFICIENT)
 )
 
 
@@ -81,7 +103,7 @@ HOVER_SPEED = np.sqrt(
 
 WIND_MODE = "gust"  #"none", "constant", "gust"
 
-WIND_VELOCITY = np.array([0.0, 0.0, 0.0], dtype=float)
+WIND_VELOCITY = np.array([0.0, 0.0, 0.0], dtype = float)
 
 WIND_FORCE_COEFFICIENT = 0.2
 
@@ -97,26 +119,112 @@ GUST_PERIOD = 6.0
 DT = 0.01                          # seconds per step
 SIMULATION_TIME = 40.0             # total simulation time
 
-
-
 # ============================================================
 # 5. CREATE THE OBJECTS
 # ============================================================
-def run_simulation():
+def current_gains():
+    """Read the gains configured above; the tuner uses this same source."""
 
-    drone = Drone(total_mass=TOTAL_MASS, arm_len=ARM_LENGTH, max_thrust_per_motor=MAX_THRUST_PER_MOTOR, moi=MOMENT_OF_INERTIA, thrust_coe=THRUST_COEFFICIENT, torque_coe=TORQUE_COEFFICIENT)
+    return {"height": np.array([KP, KI, KD], dtype = float),
+            "roll": ROLL_GAINS.copy(), "pitch": PITCH_GAINS.copy(),
+            "yaw": YAW_GAINS.copy(), "x": X_POSITION_GAINS.copy(),
+            "y": Y_POSITION_GAINS.copy()}
+
+
+def create_terrain():
+
+    if TERRAIN_MODE == "landscape":
+        return LandscapeTerrain(GROUND_HEIGHT, TERRAIN_SEED)
+    if TERRAIN_MODE == "flat":
+        return FlatTerrain(GROUND_HEIGHT)
+    if TERRAIN_MODE == "hill":
+        return HillTerrain(GROUND_HEIGHT, HILL_CENTER, HILL_HEIGHT, HILL_WIDTH)
+    if TERRAIN_MODE == "slope":
+        return SlopedTerrain(GROUND_HEIGHT, TERRAIN_SLOPE)
+    raise ValueError("TERRAIN_MODE must be flat, hill, slope, or landscape.")
+
+
+def create_drone(terrain = None):
+
+    return Drone(TOTAL_MASS, ARM_LENGTH, MAX_THRUST_PER_MOTOR,
+                 MOMENT_OF_INERTIA, THRUST_COEFFICIENT, TORQUE_COEFFICIENT,
+                 gravity = GRAVITY, ground_height = GROUND_HEIGHT,
+                 terrain = create_terrain() if terrain is None else terrain)
+
+
+def create_controllers(gains = None):
+
+    gains = current_gains() if gains is None else gains
+    hover = np.sqrt(TOTAL_MASS * GRAVITY / (4 * THRUST_COEFFICIENT))
+    maximum = np.sqrt(MAX_THRUST_PER_MOTOR / THRUST_COEFFICIENT)
+    return (HeightPIDController(*gains["height"], hover, maximum),
+            OrientationPIDController(gains["roll"], gains["pitch"], gains["yaw"],
+                                     MAX_ORIENTATION_CORRECTION, maximum),
+            PositionPIDController(gains["x"], gains["y"], np.radians(MAX_TILT_DEGREES),
+                                  tilt_smoothing_time = TILT_SMOOTHING_TIME,
+                                  max_tilt_rate = np.radians(MAX_TILT_RATE_DEGREES)))
+
+
+def create_environment():
+
+    return BasicEnvironment(WIND_MODE, WIND_VELOCITY, WIND_FORCE_COEFFICIENT,
+                            GUST_START, GUST_DURATION, GUST_PERIOD)
+
+
+def control_step(drone, state, controllers, environment, target_height,
+                 target_position, target_yaw, dt, current_time,
+                 fixed_orientation = None, disarmed = False, target_vertical_velocity = 0.0, target_horizontal_velocity = None):
+    """Shared control/physics step used by the mission and PID trials."""
+
+    height, orientation, position = controllers
+    if disarmed:
+        state.motor_speeds.fill(0.0)
+        return np.array([0.0, 0.0, target_yaw])
+    base = height.calculate_motor_speed(target_height, state, dt, target_vertical_velocity)
+    target_orientation = (position.calculate_target_orientation(
+        target_position, target_yaw, state, dt, target_horizontal_velocity) if fixed_orientation is None
+        else np.asarray(fixed_orientation, dtype = float).copy())
+    factor = max(np.cos(state.orientation[0]) * np.cos(state.orientation[1]), 0.5)
+    state.motor_speeds = orientation.calculate_motor_speed(
+        base / np.sqrt(factor), target_orientation, state, dt)
+    force = environment.calculate_wind_force(state, current_time)
+    drone.update_state(state, dt, external_force = force)
+    values = np.concatenate([state.position, state.velocity, state.orientation,
+                             state.angular_velocity, state.motor_speeds])
+    if not np.all(np.isfinite(values)) or np.linalg.norm(state.position) > 100.0:
+        raise FloatingPointError("Simulation became unstable.")
+    return target_orientation
+
+
+def run_simulation(gains = None, duration = None, include_landing = None, verbose = True,
+                   target_yaw = None, terrain = None, goal_position = None):
+
+    duration = SIMULATION_TIME if duration is None else duration
+    include_landing = INCLUDE_LANDING if include_landing is None else include_landing
+    target_yaw = np.radians(TARGET_YAW) if target_yaw is None else target_yaw
+    positive(DT, "Time step")
+    positive(duration, "Simulation duration")
+    if duration < DT:
+        raise ValueError("Simulation duration must include at least one time step.")
+    if not np.isfinite(target_yaw):
+        raise ValueError("Target yaw must be finite.")
+    terrain = create_terrain() if terrain is None else terrain
+    goal = vector([TARGET_X, TARGET_Y, TARGET_HEIGHT] if goal_position is None else goal_position,
+                  3, "Goal position")
+    drone = create_drone(terrain)
     state = DroneState()
+    state.position[2] = drone.get_ground_height(*state.position[:2])
+    landing_controller = (LandingController(
+        terrain, goal[:2], LANDING_DESCENT_SPEED, LANDING_FLARE_SPEED,
+        LANDING_FLARE_HEIGHT, speed_tolerance = SPEED_TOLERANCE,
+        max_slope_degrees = MAX_LANDING_SLOPE_DEGREES, footprint_radius = ARM_LENGTH)
+        if include_landing else None)
+    landing_active = False
+    hover_speed = np.sqrt(TOTAL_MASS * GRAVITY / (4.0 * THRUST_COEFFICIENT))
+    controllers = create_controllers(gains)
+    environment = create_environment()
+    landed = False
 
-    hover_speed = np.sqrt(TOTAL_MASS * abs(drone.gravity)/ (4.0 * THRUST_COEFFICIENT))
-    max_motor_speed = np.sqrt(MAX_THRUST_PER_MOTOR / THRUST_COEFFICIENT)
-
-    #three controllers
-    height_controller = HeightPIDController(kp = KP, ki = KI, kd = KD, hover_speed = hover_speed, max_motor_speed = max_motor_speed)
-    orientation_controller = OrientationPIDController(roll_gains = ROLL_GAINS, pitch_gains = PITCH_GAINS, yaw_gains = YAW_GAINS, max_correction = MAX_ORIENTATION_CORRECTION, max_motor_speed = max_motor_speed)
-    position_controller = PositionPIDController(x_gains = X_POSITION_GAINS, y_gains = Y_POSITION_GAINS, max_tilt = np.radians(MAX_TILT_DEGREES))
-
-    environment = BasicEnvironment(wind_mode = WIND_MODE, wind_velocity = WIND_VELOCITY, wind_force_coefficient = WIND_FORCE_COEFFICIENT, gust_start = GUST_START, gust_duration = GUST_DURATION, gust_period = GUST_PERIOD) 
-    
     # Lists for recording simulation data
     time_history = []
     height_history = []
@@ -130,53 +238,85 @@ def run_simulation():
     target_position_history = []
     waypoint_index_history = []
     distance_to_target_history = []
+    ground_height_history = []
+    landing_phase_history = []
+    commanded_position_history = []
+    target_velocity_history = []
+    velocity_vector_history = []
+    contact_speed_history = []
+    flight_stage_history = []
+    stage_start_times = {}
 
-    number_of_steps = int(SIMULATION_TIME / DT)
-    
+    number_of_steps = int(duration / DT)
 
-    route_planner = RoutePlanner(start_position=state.position.copy(), goal_position=[TARGET_X, TARGET_Y, TARGET_HEIGHT], ground_height=GROUND_HEIGHT, minimum_clearance=MINIMUM_CLEARANCE, waypoint_spacing=WAYPOINT_SPACING)
-    waypoints = route_planner.generate_route(include_landing=INCLUDE_LANDING)
-    navigation = Navigation(waypoints=waypoints, current_waypoint_index=0, arrival_tolerance=ARRIVAL_TOLERANCE, speed_tolerance=SPEED_TOLERANCE)
-    
+
+    route_planner = RoutePlanner(start_position = state.position.copy(), goal_position = goal, ground_height = GROUND_HEIGHT, minimum_clearance = MINIMUM_CLEARANCE, waypoint_spacing = WAYPOINT_SPACING, terrain = terrain)
+    waypoints = route_planner.generate_route(include_landing = include_landing)
+    stop_index = route_planner.landing_start_index - 1 if include_landing else len(waypoints) - 1
+    navigation = PathFollower(
+        waypoints, state.position.copy(), ARRIVAL_TOLERANCE, SPEED_TOLERANCE,
+        max_speed = MAX_FLIGHT_SPEED, max_acceleration = MAX_FLIGHT_ACCELERATION,
+        max_climb_rate = MAX_CLIMB_RATE, max_descent_rate = MAX_DESCENT_RATE,
+        lookahead_distance = PATH_LOOKAHEAD_DISTANCE, stop_index = max(0, stop_index),
+        max_jerk = MAX_FLIGHT_JERK)
+
     #simulation loop
     for step in range(number_of_steps):
 
         current_time = step * DT
 
-        #if step == int(10.0 / DT):
-        #    position_controller.x_integral = 0.0
-        #    position_controller.y_integral = 0.0
-
-        current_target = np.asarray(navigation.update(state), dtype=float).copy()
-        target_position = current_target[:2]
+        reference_velocity = np.zeros(3)
+        if landing_active:
+            current_target = np.asarray(navigation.get_current_target()).copy()
+            commanded_target = current_target.copy()
+        else:
+            commanded_target = navigation.update(state, DT)
+            reference_velocity = navigation.target_velocity.copy()
+            current_target = np.asarray(navigation.get_current_target()).copy()
+            if include_landing and navigation.mission_complete:
+                landing_active = True
+                navigation.mission_complete = False
+                navigation.current_waypoint_index = len(waypoints) - 1
+                current_target = np.asarray(navigation.get_current_target()).copy()
+                commanded_target = current_target.copy()
+                reference_velocity.fill(0.0)
+        active_waypoint_index = navigation.current_waypoint_index
+        flight_stage = ("landed" if landed else "landing" if landing_active else
+                        "climbing" if active_waypoint_index < route_planner.takeoff_waypoint_count
+                        else "flying")
+        stage_start_times.setdefault(flight_stage, current_time)
         target_height = current_target[2]
-
-        base_motor_speeds = height_controller.calculate_motor_speed(target_height=target_height, state=state, dt=DT)
-        base_motor_speeds = np.clip(base_motor_speeds, 0.0, max_motor_speed)
-
-        target_orientation = (position_controller.calculate_target_orientation(target_position = target_position,target_yaw = np.radians(TARGET_YAW),state = state,dt = DT))
-
-        # Compensate for vertical thrust lost when the drone tilts
-        current_roll = state.orientation[0]
-        current_pitch = state.orientation[1]
-
-        vertical_thrust_factor = (np.cos(current_roll) * np.cos(current_pitch))
-        vertical_thrust_factor = max(vertical_thrust_factor, 0.5)
-
-        # Motor thrust is proportional to motor speed squared
-        base_motor_speeds = (base_motor_speeds / np.sqrt(vertical_thrust_factor))
-
-        state.motor_speeds = (orientation_controller.calculate_motor_speed(base_motor_speeds = base_motor_speeds, target_orientation = target_orientation, state = state, dt = DT))
-        external_force = environment.calculate_wind_force(state = state, current_time = current_time)
-
-        drone.update_state(state = state, dt = DT, external_force = external_force)
+        vertical_velocity = reference_velocity[2]
+        failed = landing_controller.failed if landing_controller is not None else False
+        if landing_active and not landed and not failed:
+            commanded_target, vertical_velocity = landing_controller.target(state, DT)
+            reference_velocity[2] = vertical_velocity
+        target_orientation = control_step(
+            drone, state, controllers, environment, commanded_target[2],
+            commanded_target[:2], target_yaw, DT, current_time, disarmed = landed or failed,
+            target_vertical_velocity = vertical_velocity,
+            target_horizontal_velocity = reference_velocity[:2])
+        if landing_active and not landed and not failed:
+            landed = landing_controller.check_touchdown(state)
+            if landed:
+                navigation.advance_waypoint()
 
         recorded_time = (step + 1) * DT
+        if landed:
+            flight_stage = "landed"
+            stage_start_times.setdefault("landed", recorded_time)
         height_error = target_height - state.position[2]
 
         target_position_history.append(current_target.copy())
-        waypoint_index_history.append(navigation.current_waypoint_index)
-        distance_to_target_history.append(navigation.distance_to_target(state))
+        waypoint_index_history.append(active_waypoint_index)
+        distance_to_target_history.append(float(np.linalg.norm(current_target - state.position)))
+        ground_height_history.append(drone.get_ground_height(*state.position[:2]))
+        landing_phase_history.append(landing_controller.phase if landing_active else "cruise")
+        commanded_position_history.append(commanded_target.copy())
+        target_velocity_history.append(reference_velocity.copy())
+        velocity_vector_history.append(state.velocity.copy())
+        contact_speed_history.append(state.contact_speed)
+        flight_stage_history.append(flight_stage)
         time_history.append(recorded_time)
         height_history.append(state.position[2])
         velocity_history.append(state.velocity[2])
@@ -197,157 +337,49 @@ def run_simulation():
         "error": error_history,
         "orientation": orientation_history,
         "target_orientation": target_orientation_history,
-        "target_height": TARGET_HEIGHT,
-        "target_x": TARGET_X,
-        "target_y": TARGET_Y,
+        "target_height": goal[2],
+        "target_x": goal[0],
+        "target_y": goal[1],
         "hover_speed": hover_speed,
+        "max_motor_speed": np.sqrt(MAX_THRUST_PER_MOTOR / THRUST_COEFFICIENT),
+        "arrival_tolerance": ARRIVAL_TOLERANCE,
+        "ground_height": terrain.base_height,
+        "terrain": terrain,
+        "ground_height_history": ground_height_history,
+        "clearance": np.asarray(height_history) - np.asarray(ground_height_history),
+        "landing_phase": landing_phase_history,
+        "flight_stage": flight_stage_history,
+        "stage_start_times": stage_start_times,
+        "commanded_position_history": commanded_position_history,
+        "target_velocity_history": target_velocity_history,
+        "velocity_vector": velocity_vector_history,
+        "contact_speed": contact_speed_history,
+        "landing_failed": landing_controller.failed if landing_controller else False,
+        "touchdown_speed": landing_controller.touchdown_speed if landing_controller else None,
         "target_position_history": target_position_history,
         "waypoint_index": waypoint_index_history,
         "distance_to_target": distance_to_target_history,
-        "waypoints": np.asarray(waypoints, dtype=float),
-        "mission_complete": navigation.mission_complete
+        "waypoints": np.asarray(waypoints, dtype = float),
+        "mission_complete": navigation.mission_complete,
+        "landed": landed
     }
 
-    print("Simulation complete")
-    print(f"Hover motor speed: {hover_speed:.3f} rad/s")
-    print(f"Final route target: {waypoints[-1]}")
-    print(f"Current waypoint: {navigation.current_waypoint_index + 1}/{len(waypoints)}")
-    print(f"Mission complete: {navigation.mission_complete}")
-    state.print_status()
+    if verbose:
+        print("Simulation complete")
+        print(f"Hover motor speed: {hover_speed:.3f} rad/s")
+        print(f"Final route target: {waypoints[-1]}")
+        print(f"Current waypoint: {navigation.current_waypoint_index + 1}/{len(waypoints)}")
+        print(f"Mission complete: {navigation.mission_complete}")
+        if landing_controller:
+            print(f"Landing status: {landing_controller.phase if landing_active else 'not started'}")
+        state.print_status()
 
     return state, simulation_data
 
 
-def plot_data(simulation_data):
-    time_history = np.asarray(simulation_data["time"], dtype=float)
-    height_history = np.asarray(simulation_data["height"], dtype=float)
-    velocity_history = np.asarray(simulation_data["velocity"], dtype=float)
-    position_history = np.asarray(simulation_data["position"], dtype=float)
-    motor_speed_history = np.asarray(simulation_data["motor_speed"], dtype=float)
-    orientation_history = np.asarray(simulation_data["orientation"], dtype=float)
-    target_orientation_history = np.asarray(simulation_data["target_orientation"], dtype=float)
-    target_position_history = np.asarray(simulation_data["target_position_history"], dtype=float)
-
-    hover_speed = simulation_data["hover_speed"]
-
-    if target_orientation_history.ndim == 1:
-        target_orientation_history = np.tile(target_orientation_history, (len(time_history), 1))
-
-    if orientation_history.ndim != 2:
-        raise ValueError("orientation_history must contain one [roll, pitch, yaw] array for every timestep.")
-
-    plt.figure(figsize=(12, 12))
-
-    # Plot 1: Altitude
-    plt.subplot(3, 2, 1)
-    plt.plot(time_history, height_history, label="Actual height")
-    plt.step(time_history, target_position_history[:, 2], color="red", linestyle="--", where="post", label="Target height")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Height (m)")
-    plt.title("Drone Altitude")
-    plt.grid(True)
-    plt.legend()
-
-    # Plot 2: Vertical velocity
-    plt.subplot(3, 2, 2)
-    plt.plot(time_history, velocity_history, color="orange")
-    plt.axhline(y=0, color="black", linestyle="--")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Vertical velocity (m/s)")
-    plt.title("Vertical Velocity")
-    plt.grid(True)
-
-    # Plot 3: Four motor speeds
-    plt.subplot(3, 2, 3)
-
-    for motor_index in range(4):
-        plt.plot(time_history, motor_speed_history[:, motor_index], label=f"Motor {motor_index + 1}")
-
-    plt.axhline(y=hover_speed, color="red", linestyle="--", label="Hover speed")
-    plt.axhline(y=MAX_MOTOR_SPEED, color="purple", linestyle="--", linewidth=1.2, label="Maximum motor speed")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Motor speed (rad/s)")
-    plt.title("Motor Speeds")
-    plt.grid(True)
-    plt.legend(fontsize=8)
-
-    # Plot 4: Roll, pitch and yaw
-    plt.subplot(3, 2, 4)
-    axis_names = ["Roll", "Pitch", "Yaw"]
-    axis_colors = ["tab:blue", "tab:orange", "tab:green"]
-
-    for axis_index in range(3):
-        plt.plot(time_history, orientation_history[:, axis_index], color=axis_colors[axis_index], label=f"Actual {axis_names[axis_index]}")
-        plt.plot(time_history, target_orientation_history[:, axis_index], color=axis_colors[axis_index], linestyle="--", label=f"Target {axis_names[axis_index]}")
-
-    plt.axhline(y=0, color="black", linewidth=0.8)
-    plt.xlabel("Time (s)")
-    plt.ylabel("Orientation (degrees)")
-    plt.title("Orientation Tracking")
-    plt.grid(True)
-    plt.legend(fontsize=7)
-
-    # Plot 5: Horizontal position
-    plt.subplot(3, 2, 5)
-    plt.plot(time_history, position_history[:, 0], color="tab:blue", label="X position")
-    plt.plot(time_history, position_history[:, 1], color="tab:orange", label="Y position")
-    plt.step(time_history, target_position_history[:, 0], color="tab:blue", linestyle="--", where="post", label="Target X")
-    plt.step(time_history, target_position_history[:, 1], color="tab:orange", linestyle="--", where="post", label="Target Y")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Horizontal position (m)")
-    plt.title("Horizontal Position and Drift")
-    plt.grid(True)
-    plt.legend(fontsize=8)
-
-    # Plot 6: Distance to the active waypoint
-    plt.subplot(3, 2, 6)
-    plt.plot(time_history, simulation_data["distance_to_target"], label="Distance to active waypoint")
-    plt.axhline(y=ARRIVAL_TOLERANCE, color="red", linestyle="--", label="Arrival tolerance")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Distance (m)")
-    plt.title("Waypoint Tracking")
-    plt.grid(True)
-    plt.legend(fontsize=8)
-
-    plt.tight_layout()
-    plt.savefig("altitude_control_results.png", dpi=300)
-    plt.show()
-
-def plot_3d_trajectory(simulation_data):
-    positions = np.asarray(simulation_data["position"], dtype=float)
-    waypoints = np.asarray(simulation_data["waypoints"], dtype=float)
-
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection="3d")
-
-    ax.plot(positions[:, 0], positions[:, 1], positions[:, 2], color="tab:blue", label="Actual trajectory")
-    ax.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2], color="tab:orange", linestyle="--", marker="o", label="Planned route")
-    ax.scatter(positions[0, 0], positions[0, 1], positions[0, 2], color="green", s=80, label="First recorded position")
-    ax.scatter(waypoints[-1, 0], waypoints[-1, 1], waypoints[-1, 2], color="red", marker="*", s=150, label="Endpoint")
-    ax.scatter(positions[-1, 0], positions[-1, 1], positions[-1, 2], color="purple", marker="x", s=80, label="Final position")
-
-    ax.set_xlabel("X position (m)")
-    ax.set_ylabel("Y position (m)")
-    ax.set_zlabel("Height (m)")
-    ax.set_title("Drone 3D Trajectory")
-
-    all_points = np.vstack((positions, waypoints))
-    lower = all_points.min(axis=0)
-    upper = all_points.max(axis=0)
-    center = (lower + upper) / 2
-    half_range = max(float(np.max(upper - lower)) / 2, 0.5) * 1.1
-
-    ax.set_xlim(center[0] - half_range, center[0] + half_range)
-    ax.set_ylim(center[1] - half_range, center[1] + half_range)
-    ax.set_zlim(center[2] - half_range, center[2] + half_range)
-    ax.set_box_aspect((1, 1, 1))
-
-    ax.legend()
-    plt.tight_layout()
-    plt.savefig("drone_3d_trajectory.png", dpi=300)
-    plt.show()
-
 if __name__ == "__main__":
+    import plotting
+
     final_state, simulation_data = run_simulation()
-    plot_data(simulation_data)
-    plot_3d_trajectory(simulation_data)
+    plotting.plot_data(simulation_data)
+    plotting.plot_3d_trajectory(simulation_data)

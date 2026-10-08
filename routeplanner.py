@@ -1,16 +1,24 @@
 import numpy as np
+from terrain import FlatTerrain
 
 class RoutePlanner:
-    def __init__(self, start_position, goal_position, ground_height, minimum_clearance, waypoint_spacing):
-        self.start_position = np.array(start_position, dtype=float)
-        self.goal_position = np.array(goal_position, dtype=float)
+    def __init__(self, start_position, goal_position, ground_height, minimum_clearance, waypoint_spacing,
+                 terrain = None):
+
+        self.start_position = np.array(start_position, dtype = float)
+        self.goal_position = np.array(goal_position, dtype = float)
         self.ground_height = np.float64(ground_height)
 
         self.minimum_clearance = float(minimum_clearance)
         self.waypoint_spacing = float(waypoint_spacing)
         self.waypoints = []
+        self.terrain = terrain if terrain is not None else FlatTerrain(ground_height)
+        self.landing_start_index = None
+        self.cruise_altitude = None
+        self.takeoff_waypoint_count = 0
 
     def validate_inputs(self):
+
         if self.start_position.shape != (3,) or self.goal_position.shape != (3,):
             raise ValueError("Start and goal positions must each contain three coordinates.")
 
@@ -31,20 +39,26 @@ class RoutePlanner:
 
 
     def get_ground_height(self, x, y):
-        return self.ground_height
+
+        return float(self.terrain.height(x, y))
 
 
     def get_minimum_altitude(self, x, y):
+
         return self.get_ground_height(x, y) + self.minimum_clearance
 
 
     def calculate_route_distance(self, start, goal):
-        return float(np.linalg.norm(np.asarray(goal, dtype=float) - np.asarray(start, dtype=float)))
+
+        return float(np.linalg.norm(np.asarray(goal, dtype = float) - np.asarray(start, dtype = float)))
 
     def take_off(self):
+
         start = self.start_position.copy()
         takeoff_goal = start.copy()
         takeoff_goal[2] = max(start[2], self.get_minimum_altitude(start[0], start[1]))
+        if self.cruise_altitude is not None:
+            takeoff_goal[2] = max(takeoff_goal[2], self.cruise_altitude)
 
         distance = self.calculate_route_distance(start, takeoff_goal)
 
@@ -57,7 +71,8 @@ class RoutePlanner:
 
 
     def land(self, landing_start):
-        start = np.asarray(landing_start, dtype=float).copy()
+
+        start = np.asarray(landing_start, dtype = float).copy()
         landing_goal = start.copy()
         landing_goal[2] = self.get_ground_height(start[0], start[1])
 
@@ -73,15 +88,22 @@ class RoutePlanner:
         return waypoints
 
 
-    def generate_route(self, include_landing=False):
+    def generate_route(self, include_landing = False):
+
         self.validate_inputs()
         self.waypoints = []
+        self.landing_start_index = None
+        self.cruise_altitude = max(
+            self.start_position[2], self.goal_position[2],
+            self.terrain.maximum_height_along(self.start_position[:2], self.goal_position[:2])
+ + self.minimum_clearance)
 
         self.waypoints.extend(self.take_off())
+        self.takeoff_waypoint_count = len(self.waypoints)
         start = self.waypoints[-1].copy() if self.waypoints else self.start_position.copy()
 
         goal = self.goal_position.copy()
-        goal[2] = max(goal[2], self.get_minimum_altitude(goal[0], goal[1]))
+        goal[2] = self.cruise_altitude
 
         distance = self.calculate_route_distance(start, goal)
 
@@ -98,11 +120,14 @@ class RoutePlanner:
             self.waypoints.append(goal.copy())
 
         if include_landing:
+            self.landing_start_index = len(self.waypoints)
             self.waypoints.extend(self.land(self.waypoints[-1]))
+            self.landing_start_index = min(self.landing_start_index, len(self.waypoints) - 1)
 
         return self.waypoints
 
 
     def get_waypoints(self):
+
         return self.waypoints
 

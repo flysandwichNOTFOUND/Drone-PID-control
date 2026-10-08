@@ -1,0 +1,461 @@
+{
+  "gain_order": [
+    "Kp",
+    "Ki",
+    "Kd"
+  ],
+  "baseline_gains": {
+    "height": [
+      99.287525633,
+      0.0,
+      55.417309621
+    ],
+    "roll": [
+      29.870015154,
+      0.075057041,
+      10.038389657
+    ],
+    "pitch": [
+      29.488386635,
+      0.0,
+      10.320439215
+    ],
+    "yaw": [
+      39.97037935,
+      0.041186371,
+      34.450757167
+    ],
+    "x": [
+      0.179539742,
+      0.001142095,
+      0.209120612
+    ],
+    "y": [
+      0.176207477,
+      0.001492939,
+      0.226833114
+    ]
+  },
+  "selected_gains": {
+    "height": [
+      211.09205955000616,
+      0.22336330908285906,
+      93.86398157684172
+    ],
+    "roll": [
+      50.67943313001923,
+      0.026414318017211363,
+      14.57445003341935
+    ],
+    "pitch": [
+      50.57193894306509,
+      0.06085049969922976,
+      14.352389900447822
+    ],
+    "yaw": [
+      37.65031682227678,
+      0.048992120548575276,
+      34.05348635029568
+    ],
+    "x": [
+      0.30107297733535376,
+      0.0007514206612332609,
+      0.2976992235148266
+    ],
+    "y": [
+      0.30397965818273315,
+      0.004076893870398475,
+      0.3094512134753671
+    ]
+  },
+  "search": {
+    "seeds": [
+      73
+    ],
+    "trials_per_controller_per_seed": 120,
+    "bounds": {
+      "height": [
+        [
+          50.0,
+          250.0
+        ],
+        [
+          0.0,
+          4.0
+        ],
+        [
+          25.0,
+          120.0
+        ]
+      ],
+      "roll": [
+        [
+          15.0,
+          70.0
+        ],
+        [
+          0.0,
+          0.2
+        ],
+        [
+          4.0,
+          25.0
+        ]
+      ],
+      "pitch": [
+        [
+          15.0,
+          70.0
+        ],
+        [
+          0.0,
+          0.2
+        ],
+        [
+          4.0,
+          25.0
+        ]
+      ],
+      "yaw": [
+        [
+          20.0,
+          90.0
+        ],
+        [
+          0.0,
+          0.2
+        ],
+        [
+          10.0,
+          65.0
+        ]
+      ],
+      "x": [
+        [
+          0.02,
+          0.35
+        ],
+        [
+          0.0,
+          0.01
+        ],
+        [
+          0.06,
+          0.6
+        ]
+      ],
+      "y": [
+        [
+          0.02,
+          0.35
+        ],
+        [
+          0.0,
+          0.01
+        ],
+        [
+          0.06,
+          0.6
+        ]
+      ]
+    }
+  },
+  "baseline_metrics": {
+    "mission_complete": true,
+    "landed": false,
+    "final_error_m": 0.00476538327060635,
+    "final_speed_m_s": 4.0007032212592306e-05,
+    "tracking_rmse_m": 0.2299667505775988,
+    "first_final_target_arrival_s": 6.99,
+    "saturation_fraction": 0.0,
+    "max_height_m": 2.0877186239008325
+  },
+  "selected_metrics": {
+    "mission_complete": true,
+    "landed": false,
+    "final_error_m": 0.004643897645609058,
+    "final_speed_m_s": 6.269952297573877e-05,
+    "tracking_rmse_m": 0.20212096960520204,
+    "first_final_target_arrival_s": 5.37,
+    "saturation_fraction": 0.0,
+    "max_height_m": 2.0562091567346874
+  },
+  "selected_validation": {
+    "candidate_accepted": true,
+    "baseline_combined_score": 6.981346840317757,
+    "candidate_combined_score": 5.459071493213452,
+    "baseline_route": {
+      "score": 0.7959957169138779,
+      "mission_complete": true,
+      "final_error": 0.00476538327060635,
+      "landed": false
+    },
+    "candidate_route": {
+      "score": 0.6153813271464087,
+      "mission_complete": true,
+      "final_error": 0.004643897645609058,
+      "landed": false
+    }
+  },
+  "trials": [
+    {
+      "seed": 73,
+      "candidate_fraction": 1.0,
+      "validation": {
+        "candidate_accepted": true,
+        "baseline_combined_score": 6.981346840317757,
+        "candidate_combined_score": 5.753924802242333,
+        "baseline_route": {
+          "score": 0.7959957169138779,
+          "mission_complete": true,
+          "final_error": 0.00476538327060635,
+          "landed": false
+        },
+        "candidate_route": {
+          "score": 0.5852305190467552,
+          "mission_complete": true,
+          "final_error": 0.004516955603382157,
+          "landed": false
+        }
+      },
+      "candidate_gains": {
+        "height": [
+          248.36023752234155,
+          0.29781774544381207,
+          106.67953889545562
+        ],
+        "roll": [
+          57.6159057886923,
+          0.010200077022948478,
+          16.086470158892467
+        ],
+        "pitch": [
+          57.599789712420126,
+          0.08113399959897301,
+          15.696373462263763
+        ],
+        "yaw": [
+          36.87696264636904,
+          0.051594037064767034,
+          33.92106274472757
+        ],
+        "x": [
+          0.3415840557804717,
+          0.0006211958816443479,
+          0.32722542735310206
+        ],
+        "y": [
+          0.3465703852436442,
+          0.004938212160531301,
+          0.3369905799671561
+        ]
+      },
+      "additional_checks": {
+        "yaw_90": {
+          "mission_complete": true,
+          "landed": false,
+          "final_error_m": 0.004586075567049578,
+          "final_speed_m_s": 6.602021581996994e-05,
+          "tracking_rmse_m": 0.1970507779601779,
+          "first_final_target_arrival_s": 5.1000000000000005,
+          "saturation_fraction": 0.0,
+          "max_height_m": 2.045827523724936
+        },
+        "landing": {
+          "mission_complete": true,
+          "landed": true,
+          "final_error_m": 0.006227586718774572,
+          "final_speed_m_s": 0.0,
+          "tracking_rmse_m": 0.17755053451403088,
+          "first_final_target_arrival_s": 7.38,
+          "saturation_fraction": 0.8907142857142857,
+          "max_height_m": 2.0456812471341395
+        }
+      },
+      "additional_checks_passed": true
+    },
+    {
+      "seed": 73,
+      "candidate_fraction": 0.75,
+      "validation": {
+        "candidate_accepted": true,
+        "baseline_combined_score": 6.981346840317757,
+        "candidate_combined_score": 5.459071493213452,
+        "baseline_route": {
+          "score": 0.7959957169138779,
+          "mission_complete": true,
+          "final_error": 0.00476538327060635,
+          "landed": false
+        },
+        "candidate_route": {
+          "score": 0.6153813271464087,
+          "mission_complete": true,
+          "final_error": 0.004643897645609058,
+          "landed": false
+        }
+      },
+      "candidate_gains": {
+        "height": [
+          211.09205955000616,
+          0.22336330908285906,
+          93.86398157684172
+        ],
+        "roll": [
+          50.67943313001923,
+          0.026414318017211363,
+          14.57445003341935
+        ],
+        "pitch": [
+          50.57193894306509,
+          0.06085049969922976,
+          14.352389900447822
+        ],
+        "yaw": [
+          37.65031682227678,
+          0.048992120548575276,
+          34.05348635029568
+        ],
+        "x": [
+          0.30107297733535376,
+          0.0007514206612332609,
+          0.2976992235148266
+        ],
+        "y": [
+          0.30397965818273315,
+          0.004076893870398475,
+          0.3094512134753671
+        ]
+      },
+      "additional_checks": {
+        "yaw_90": {
+          "mission_complete": true,
+          "landed": false,
+          "final_error_m": 0.004696230076110872,
+          "final_speed_m_s": 6.342257218396322e-05,
+          "tracking_rmse_m": 0.20204522170286923,
+          "first_final_target_arrival_s": 5.38,
+          "saturation_fraction": 0.0,
+          "max_height_m": 2.0564462722565007
+        },
+        "landing": {
+          "mission_complete": true,
+          "landed": true,
+          "final_error_m": 0.006046695283517381,
+          "final_speed_m_s": 0.0,
+          "tracking_rmse_m": 0.18195337606259157,
+          "first_final_target_arrival_s": 7.79,
+          "saturation_fraction": 0.885,
+          "max_height_m": 2.0562091567346874
+        }
+      },
+      "additional_checks_passed": true
+    },
+    {
+      "seed": 73,
+      "candidate_fraction": 0.5,
+      "validation": {
+        "candidate_accepted": true,
+        "baseline_combined_score": 6.981346840317757,
+        "candidate_combined_score": 5.707873221644782,
+        "baseline_route": {
+          "score": 0.7959957169138779,
+          "mission_complete": true,
+          "final_error": 0.00476538327060635,
+          "landed": false
+        },
+        "candidate_route": {
+          "score": 0.655183828830207,
+          "mission_complete": true,
+          "final_error": 0.004770074896822059,
+          "landed": false
+        }
+      },
+      "candidate_gains": {
+        "height": [
+          173.82388157767076,
+          0.14890887272190603,
+          81.04842425822781
+        ],
+        "roll": [
+          43.74296047134615,
+          0.04262855901147424,
+          13.062429907946234
+        ],
+        "pitch": [
+          43.544088173710065,
+          0.040566999799486504,
+          13.008406338631882
+        ],
+        "yaw": [
+          38.42367099818452,
+          0.04639020403238352,
+          34.185909955863785
+        ],
+        "x": [
+          0.26056189889023584,
+          0.000881645440822174,
+          0.26817301967655105
+        ],
+        "y": [
+          0.2613889311218221,
+          0.0032155755802656507,
+          0.2819118469835781
+        ]
+      }
+    },
+    {
+      "seed": 73,
+      "candidate_fraction": 0.25,
+      "validation": {
+        "candidate_accepted": true,
+        "baseline_combined_score": 6.981346840317757,
+        "candidate_combined_score": 6.2253690492693465,
+        "baseline_route": {
+          "score": 0.7959957169138779,
+          "mission_complete": true,
+          "final_error": 0.00476538327060635,
+          "landed": false
+        },
+        "candidate_route": {
+          "score": 0.7109918307970297,
+          "mission_complete": true,
+          "final_error": 0.0048578116728574365,
+          "landed": false
+        }
+      },
+      "candidate_gains": {
+        "height": [
+          136.5557036053354,
+          0.07445443636095302,
+          68.2328669396139
+        ],
+        "roll": [
+          36.806487812673076,
+          0.05884280000573712,
+          11.550409782473118
+        ],
+        "pitch": [
+          36.51623740435503,
+          0.020283499899743252,
+          11.664422776815941
+        ],
+        "yaw": [
+          39.19702517409226,
+          0.04378828751619176,
+          34.31833356143189
+        ],
+        "x": [
+          0.22005082044511792,
+          0.001011870220411087,
+          0.23864681583827552
+        ],
+        "y": [
+          0.21879820406091105,
+          0.002354257290132825,
+          0.254372480491789
+        ]
+      }
+    }
+  ],
+  "scope": "Best tested gains for configured model and scoring; no global optimality guarantee."
+}
