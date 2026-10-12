@@ -4,6 +4,7 @@ All rendering settings live here. Flight limits and ground height are supplied
 by the simulation data, keeping this module independent of main.py.
 """
 import numpy as np
+from project_paths import output_path
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, LightSource
 from matplotlib.patches import Patch
@@ -143,7 +144,7 @@ def plot_data(simulation_data, *, show = True):
     mark_flight_stages(figure.axes, simulation_data.get("stage_start_times", {}))
     figure.subplots_adjust(hspace = 0.55)
     plt.tight_layout(h_pad = 2.0)
-    plt.savefig("altitude_control_results.png", dpi = 300)
+    plt.savefig(output_path("altitude_control_results.png"), dpi = 300)
     if show:
         plt.show()
     return figure
@@ -208,7 +209,7 @@ def plot_3d_trajectory(simulation_data, *, show = True):
     ax.legend(handles + [Patch(facecolor = "olivedrab", alpha = 0.85)], labels + ["Terrain"],
               loc = "upper left", fontsize = 8)
     plt.tight_layout()
-    plt.savefig("drone_3d_trajectory.png", dpi = 300)
+    plt.savefig(output_path("drone_3d_trajectory.png"), dpi = 300)
     if show:
         plt.show()
     return fig
@@ -352,7 +353,7 @@ def plot_validation(history, *, target_height, hover_speed, max_motor_speed, sho
 
     figure.tight_layout()
     figure.savefig(
-        "auto_tune_results.png",
+        output_path("auto_tune_results.png"),
         dpi = 200,
     )
     if show:

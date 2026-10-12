@@ -92,7 +92,8 @@ Each command is then clipped to $[0,\omega_{\max}]$.
 
 | File | Purpose |
 | --- | --- |
-| `main.py` | Simulation entry point, parameters, controller updates, and data recording. |
+| `main.py` | Simulation entry point, targets, mode selection, and data recording. |
+| `parameters.py` | PID gains and shared physical, navigation, terrain, wind, and simulation settings. |
 | `plotting.py` | Simulation graphs, graph scale settings, and PID-validation plots. |
 | `terrain.py` | Shared flat, hill, slope, and procedural landscape elevation models. |
 | `landing.py` | Terrain-aware alignment, descent, flare, and touchdown detection. |
@@ -103,13 +104,13 @@ Each command is then clipped to $[0,\omega_{\max}]$.
 | `validation.py` | Shared input checks. |
 | `navigation.py` | Waypoint arrival and progression. |
 | `routeplanner.py` | Takeoff, cruise, and optional landing waypoints. |
-| `test_simulation.py` | Controller, dynamics, mission, and tuner regression tests. |
+| `tests/test_simulation.py` | Controller, dynamics, mission, and tuner regression tests. |
 | `requirements.txt` | Python dependencies for pip installation. |
-| `auto_tune_pid.py` | Optional utility for tuning PID gains through separate simulation trials. |
+| `tools/auto_tune_pid.py` | Optional utility for tuning PID gains through separate simulation trials. |
 | `README.md` | Project documentation. |
 | `altitude_control_results.png`, `drone_3d_trajectory.png` | Plots saved by the simulation. |
 
-**`auto_tune_PID.py` is only a PID tuning tool. It is not part of the normal simulation execution path.** The supplied script is named `auto_tune_pid.py`; use the capitalization present in your repository. Recommended gains must be applied manually in `main.py`.
+**`auto_tune_PID.py` is only a PID tuning tool. It is not part of the normal simulation execution path.** The supplied script is named `auto_tune_pid.py`; use the capitalization present in your repository. Recommended gains must be applied manually in `parameters.py`.
 
 ## Installation
 
@@ -179,7 +180,7 @@ The simulation prints the final drone state and opens plots of altitude, vertica
 
 ### Configure a Run
 
-Edit flight and physical terrain settings near the top of `main.py`. Graph scale settings are in `plotting.py`:
+Edit targets and mode selections in `main.py`; edit PID gains and other flight and terrain settings in `parameters.py`. Graph scale settings are in `plotting.py`:
 
 | Setting | Parameters |
 | --- | --- |
@@ -194,9 +195,9 @@ Edit flight and physical terrain settings near the top of `main.py`. Graph scale
 
 ### Landing and Automated Checks
 
-Landing is enabled with `INCLUDE_LANDING = True` in `main.py`. The default `TERRAIN_MODE = "landscape"` creates a reproducible 28 × 28 m view of rolling hills, a ridge, valleys, and smaller undulations. Set `TERRAIN_SEED` to vary the smaller undulations; the major landforms are defined in `LandscapeTerrain.features` in `terrain.py`. This is a synthetic landscape, not surveyed terrain. Rendering adds directional sunlight and elevation colors.
+Landing is enabled with `INCLUDE_LANDING = True` in `parameters.py`. The default `TERRAIN_MODE = "landscape"` creates a reproducible 28 × 28 m view of rolling hills, a ridge, valleys, and smaller undulations. Set `TERRAIN_SEED` to vary the smaller undulations; the major landforms are defined in `LandscapeTerrain.features` in `terrain.py`. This is a synthetic landscape, not surveyed terrain. Rendering adds directional sunlight and elevation colors.
 
-The modes `"flat"`, `"hill"`, and `"slope"` remain available; configure the hill center, height, and width or `TERRAIN_SLOPE` in `main.py`. Planning, physics, landing, and plotting all use the same terrain model. Ground elevation is queried at the drone's actual horizontal position. The landscape planner samples the route and adds a conservative gradient-based allowance for peaks between samples.
+The modes `"flat"`, `"hill"`, and `"slope"` remain available; configure the hill center, height, and width or `TERRAIN_SLOPE` in `parameters.py`. Planning, physics, landing, and plotting all use the same terrain model. Ground elevation is queried at the drone's actual horizontal position. The landscape planner samples the route and adds a conservative gradient-based allowance for peaks between samples.
 
 The route climbs above the highest terrain along the straight crossing before moving horizontally. At the destination, the landing controller aligns over the target, descends at `LANDING_DESCENT_SPEED`, and slows to `LANDING_FLARE_SPEED` below `LANDING_FLARE_HEIGHT`. Descent pauses if position, horizontal speed, or tilt moves outside the alignment limits. A 3 cm contact bias ensures touchdown. Low-speed contact disarms the motors and completes the mission; an impact above 0.35 m/s is recorded as `hard_landing` and does not complete the mission successfully.
 
@@ -226,20 +227,20 @@ For pip-based environments, install dependencies with `python -m pip install -r 
 For a broader search that applies the best validated gains automatically, run:
 
 ```bash
-python retune_pid.py
+python -m tools.retune_pid
 ```
 
 This searches two random seeds with 120 trials per controller per seed, compares candidates with the starting gains, and checks flight at 90-degree yaw and landing before applying gains. It writes `pid_retuning_report.json`, `optimized_pid_gains.json`, and updated plots. The selected gains are the best tested under the recorded model, bounds, and scoring criteria; the search does not prove a global optimum.
 
-If the selected gains approach the search limits, `python retune_pid.py --expanded` performs another search with wider ranges. It preserves the prior report as `pid_retuning_report_initial.json` and compares new candidates with the currently configured gains.
+If the selected gains approach the search limits, `python -m tools.retune_pid --expanded` performs another search with wider ranges. It preserves the prior report as `pid_retuning_report_initial.json` and compares new candidates with the currently configured gains.
 
 Run the tuning tool separately:
 
 ```bash
-python auto_tune_pid.py
+python -m tools.auto_tune_pid
 ```
 
-Use `auto_tune_PID.py` if that is your repositoryâ€™s filename. The tool reads the current gains and flight settings from `main.py`, and uses the same control step and environment as the main simulation. It compares candidates against the current gains in both a combined X/Y trial and the actual configured waypoint mission. Candidates must complete the mission and score no worse in either comparison; otherwise the output retains the current gains. The tool writes `optimized_pid_gains.json` (including validation results) and `auto_tune_results.png`. Copy accepted gains into `main.py`, then rerun the simulation.
+Use `auto_tune_PID.py` if that is your repositoryâ€™s filename. The tool reads targets and modes from `main.py` and gains and shared settings from `parameters.py`, and uses the same control step and environment as the main simulation. It compares candidates against the current gains in both a combined X/Y trial and the actual configured waypoint mission. Candidates must complete the mission and score no worse in either comparison; otherwise the output retains the current gains. The tool writes `optimized_pid_gains.json` (including validation results) and `auto_tune_results.png`. Copy accepted gains into `parameters.py`, then rerun the simulation.
 
 ## Results
 
@@ -296,7 +297,7 @@ rest at the destination before the existing landing controller takes over.
 
 Adjust `MAX_FLIGHT_SPEED` (1.2 m/s), `MAX_FLIGHT_ACCELERATION` (0.8 m/s�),
 `MAX_CLIMB_RATE` (0.8 m/s), `MAX_DESCENT_RATE` (0.4 m/s), and
-`PATH_LOOKAHEAD_DISTANCE` (1.0 m) in `main.py`. These limits apply to the flight
+`PATH_LOOKAHEAD_DISTANCE` (1.0 m) in `parameters.py`. These limits apply to the flight
 reference; the actual drone can deviate under wind and controller tracking error.
 Look-ahead throttling slows the reference when the drone falls behind. The
 look-ahead distance is a slowing threshold rather than a strict distance bound.
@@ -305,7 +306,7 @@ Landing continues to use its separate descent and flare settings.
 
 Roll and pitch commands use a first-order filter followed by a per-axis rate
 limit before reaching the attitude PID. Configure TILT_SMOOTHING_TIME (0.03 s)
-and MAX_TILT_RATE_DEGREES (10 degrees/s) in main.py. The filter starts from
+and MAX_TILT_RATE_DEGREES (10 degrees/s) in parameters.py. The filter starts from
 the measured tilt and preserves the existing maximum tilt limit. Yaw commands
 are unchanged. These settings limit commanded tilt, not actual angular motion;
 extra filtering adds response delay, so check braking and landing when adjusting
@@ -320,3 +321,25 @@ continuous; the existing climb/cross corner still finishes at rest. The smooth
 look-ahead clock also reserves acceleration and jerk for slowing when tracking
 falls behind. Its distance threshold remains soft: jerk-limited stopping needs
 extra distance. This flight profile does not change the separate landing flare.
+
+
+## Project folders
+
+Core simulation modules remain beside main.py. Optional tuning utilities are in
+tools/, regression tests are in tests/, and all generated graphs and tuning
+reports are saved to outputs/ relative to the project root, regardless of the
+working directory. project_paths.py provides these shared locations.
+
+Run from the project root:
+
+```powershell
+python main.py
+python -m unittest -v
+python -m tools.auto_tune_pid
+python -m tools.retune_pid --help
+```
+
+Direct script execution also works: python tools/auto_tune_pid.py,
+python tools/retune_pid.py, and python tests/test_simulation.py. The retuning
+tool applies validated gains to the root parameters.py; the staged auto-tuner only
+writes recommendations.

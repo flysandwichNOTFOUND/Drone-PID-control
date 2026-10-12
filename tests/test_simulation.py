@@ -3,10 +3,16 @@
 Run with: python -m unittest -v
 """
 import unittest
+import sys
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from unittest.mock import patch
 import numpy as np
 import main
-import auto_tune_pid as tuner
+import parameters
+from tools import auto_tune_pid as tuner
 from attitude import integrate_orientation
 from controllerV1 import OrientationPIDController, PositionPIDController
 from testing import DroneState
@@ -56,7 +62,7 @@ class ControllerTests(unittest.TestCase):
                 state.orientation[2] = heading
                 controller = PositionPIDController([1, 0, 0], [1, 0, 0], 0.5)
                 state.orientation = controller.calculate_target_orientation(target, heading, state, 0.01)
-                state.motor_speeds.fill(main.HOVER_SPEED)
+                state.motor_speeds.fill(parameters.HOVER_SPEED)
                 force = main.create_drone().net_force(state)[:2]
                 self.assertGreater(np.dot(force, target), 0)
                 # Cross-axis acceleration is negligible for small tilt commands.
@@ -111,13 +117,13 @@ class DynamicsTests(unittest.TestCase):
         state = DroneState()
         state.position[2] = 0.01
         state.velocity[2] = -2
-        drone = main.create_drone(FlatTerrain(main.GROUND_HEIGHT))
+        drone = main.create_drone(FlatTerrain(parameters.GROUND_HEIGHT))
         drone.update_state(state, 0.01)
-        self.assertEqual(state.position[2], main.GROUND_HEIGHT)
+        self.assertEqual(state.position[2], parameters.GROUND_HEIGHT)
         self.assertEqual(state.velocity[2], 0)
-        state.motor_speeds.fill(main.MAX_MOTOR_SPEED)
+        state.motor_speeds.fill(parameters.MAX_MOTOR_SPEED)
         drone.update_state(state, 0.01)
-        self.assertGreater(state.position[2], main.GROUND_HEIGHT)
+        self.assertGreater(state.position[2], parameters.GROUND_HEIGHT)
 
 
 class MissionTests(unittest.TestCase):
@@ -126,8 +132,8 @@ class MissionTests(unittest.TestCase):
         for heading in [0, np.pi / 2]:
             state, data = main.run_simulation(verbose = False, target_yaw = heading, include_landing = False)
             self.assertTrue(data['mission_complete'])
-            self.assertLess(np.linalg.norm(state.position - data['waypoints'][-1]), main.ARRIVAL_TOLERANCE)
-            self.assertLess(np.linalg.norm(state.velocity), main.SPEED_TOLERANCE)
+            self.assertLess(np.linalg.norm(state.position - data['waypoints'][-1]), parameters.ARRIVAL_TOLERANCE)
+            self.assertLess(np.linalg.norm(state.velocity), parameters.SPEED_TOLERANCE)
             self.assertTrue(np.all(np.isfinite(data['position'])))
             targets = np.asarray(data['target_position_history'])
             np.testing.assert_allclose(targets, data['waypoints'][data['waypoint_index']])
@@ -135,28 +141,28 @@ class MissionTests(unittest.TestCase):
     def test_landing_disarms_only_at_ground(self):
 
         state, data = main.run_simulation(include_landing = True, duration = 70, verbose = False,
-                                          terrain = FlatTerrain(main.GROUND_HEIGHT))
+                                          terrain = FlatTerrain(parameters.GROUND_HEIGHT))
         self.assertTrue(data['landed'])
         self.assertTrue(data['mission_complete'])
-        self.assertEqual(state.position[2], main.GROUND_HEIGHT)
-        self.assertGreaterEqual(min(data['height']), main.GROUND_HEIGHT)
+        self.assertEqual(state.position[2], parameters.GROUND_HEIGHT)
+        self.assertGreaterEqual(min(data['height']), parameters.GROUND_HEIGHT)
         np.testing.assert_array_equal(state.motor_speeds, np.zeros(4))
         speeds = np.asarray(data['motor_speed'])
         disarmed = np.all(speeds == 0, axis = 1)
-        self.assertTrue(np.all(np.asarray(data['height'])[disarmed] == main.GROUND_HEIGHT))
+        self.assertTrue(np.all(np.asarray(data['height'])[disarmed] == parameters.GROUND_HEIGHT))
 
     def test_tuner_uses_main_settings_and_environment(self):
 
         for key, value in main.current_gains().items():
             np.testing.assert_array_equal(tuner.initial_gain_dictionary()[key], value)
-        self.assertEqual(tuner.MAX_TILT_DEGREES, main.MAX_TILT_DEGREES)
+        self.assertEqual(tuner.MAX_TILT_DEGREES, parameters.MAX_TILT_DEGREES)
         with patch.object(main, 'control_step', wraps = main.control_step) as step:
             history = tuner.run_simulation(main.current_gains(), 0.02, target_position = [1, 0])
         self.assertIsNotNone(history)
-        self.assertEqual(step.call_count, 2)
+        self.assertEqual(step.call_count, int(0.02 / parameters.DT))
         environment = step.call_args.args[3]
         self.assertEqual(environment.wind_mode, main.WIND_MODE)
-        self.assertEqual(environment.wind_force_coefficient, main.WIND_FORCE_COEFFICIENT)
+        self.assertEqual(environment.wind_force_coefficient, parameters.WIND_FORCE_COEFFICIENT)
 
     def test_tuner_rejects_worse_recommendations(self):
 
@@ -206,7 +212,8 @@ class TerrainLandingTests(unittest.TestCase):
 
     def test_default_landscape_landing(self):
 
-        state, data = main.run_simulation(terrain = LandscapeTerrain(), include_landing = True, verbose = False)
+        state, data = main.run_simulation(terrain = LandscapeTerrain(), goal_position = [1.5, -0.5, 2],
+                                          include_landing = True, verbose = False)
         self.assertTrue(data['landed'])
         self.assertFalse(data['landing_failed'])
         self.assertGreaterEqual(min(data['clearance']), -1e-10)
@@ -237,12 +244,43 @@ class TerrainLandingTests(unittest.TestCase):
 
         terrain = HillTerrain()
         start = [0, 0, float(terrain.height(0, 0))]
-        planner = RoutePlanner(start, [10, 8, 2], 0, 2, 1, terrain = terrain)
+        planner = RoutePlanner(start, [10, 8, 2], 0, 2, 1, terrain = terrain, use_astar = False)
         waypoints = np.asarray(planner.generate_route(include_landing = True))
         np.testing.assert_allclose(planner.cruise_altitude, 5.0)
         crossing = waypoints[(waypoints[:, 0] > 0) & (waypoints[:, 0] < 10)]
         self.assertTrue(np.all(crossing[:, 2] >= terrain.height(crossing[:, 0], crossing[:, 1]) + 2))
         self.assertAlmostEqual(waypoints[-1, 2], float(terrain.height(10, 8)))
+
+    def test_astar_detours_and_preserves_segment_clearance(self):
+
+        from pathfinding import AStarPathfinder
+
+        terrain = HillTerrain(center = [3, 0], height = 5, width = 0.7)
+        start = [0, 0, float(terrain.height(0, 0))]
+        planner = RoutePlanner(start, [6, 0, 2], 0, 2, 1, terrain = terrain,
+                               maximum_altitude = 4, search_bounds = [0, 6, -3, 3])
+        route = np.asarray(planner.generate_route(include_landing = True))
+        self.assertLess(planner.cruise_altitude, 3)
+        self.assertGreater(np.max(np.abs(route[:, 1])), 0.5)
+        self.assertLessEqual(np.max(np.linalg.norm(np.diff(route, axis = 0), axis = 1)), 1 + 1e-10)
+        self.assertEqual(route[planner.takeoff_waypoint_count - 1, 2], planner.cruise_altitude)
+        checker = AStarPathfinder(terrain, 2, maximum_altitude = 4)
+        cruise = route[planner.takeoff_waypoint_count - 1:planner.landing_start_index]
+        for a, b in zip(cruise, cruise[1:]):
+            self.assertTrue(checker.segment_is_clear(a, b))
+        self.assertAlmostEqual(route[-1, 2], float(terrain.height(6, 0)))
+
+    def test_astar_failure_is_not_replaced_by_straight_route(self):
+
+        from pathfinding import NoPathError
+
+        terrain = HillTerrain(center = [0.5, 0], height = 5, width = 0.05)
+        planner = RoutePlanner([0, 0, float(terrain.height(0, 0))], [1, 0, 2],
+                               0, 2, 1, terrain = terrain, maximum_altitude = 3,
+                               search_bounds = [0, 1, 0, 0])
+        with self.assertRaises(NoPathError):
+            planner.generate_route()
+        self.assertEqual(planner.waypoints, [])
 
     def test_steep_landing_site_is_rejected(self):
 

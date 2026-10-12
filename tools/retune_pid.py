@@ -1,57 +1,64 @@
 """Broader reproducible PID search, followed by baseline and mission checks.
 
-Run: python retune_pid.py
-Writes a tuning report and applies the best validated gains to main.py.
+Run from the project root: python -m tools.retune_pid
+Writes a tuning report and applies the best validated gains to parameters.py.
 """
 import json
 import argparse
 from pathlib import Path
 import re
+import sys
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from project_paths import PROJECT_ROOT, output_path
 
 import plotting
 plotting.use_backend("Agg")
 import numpy as np
 
-import auto_tune_pid as tuner
+from tools import auto_tune_pid as tuner
 import main as mission
+import parameters
 
 
 def flight_metrics(gains, yaw = 0.0, landing = False):
 
     state, data = mission.run_simulation(
         gains = gains, target_yaw = yaw, include_landing = landing,
-        duration = 70.0 if landing else mission.SIMULATION_TIME, verbose = False)
+        duration = 70.0 if landing else parameters.SIMULATION_TIME, verbose = False)
     speeds = np.asarray(data["motor_speed"])
     targets = np.asarray(data["target_position_history"])
     positions = np.asarray(data["position"])
     indices = np.asarray(data["waypoint_index"])
     final_index = len(data["waypoints"]) - 1
     arrived = ((indices == final_index)
-               & (np.asarray(data["distance_to_target"]) <= mission.ARRIVAL_TOLERANCE))
+               & (np.asarray(data["distance_to_target"]) <= parameters.ARRIVAL_TOLERANCE))
     return {"mission_complete": bool(data["mission_complete"]),
             "landed": bool(data["landed"]),
             "final_error_m": float(np.linalg.norm(state.position - data["waypoints"][-1])),
             "final_speed_m_s": float(np.linalg.norm(state.velocity)),
             "tracking_rmse_m": float(np.sqrt(np.mean(np.sum((targets - positions)**2, axis = 1)))),
             "first_final_target_arrival_s": float(np.asarray(data["time"])[arrived][0]) if np.any(arrived) else None,
-            "saturation_fraction": float(np.mean(np.any((speeds <= 0) | (speeds >= mission.MAX_MOTOR_SPEED), axis = 1))),
+            "saturation_fraction": float(np.mean(np.any((speeds <= 0) | (speeds >= parameters.MAX_MOTOR_SPEED), axis = 1))),
             "max_height_m": float(np.max(positions[:, 2]))}
 
 
 def apply_gains(gains):
 
-    path = Path(__file__).with_name("main.py")
+    path = PROJECT_ROOT / "parameters.py"
     source = path.read_text(encoding = "utf-8")
     for name, value in zip(["KP", "KI", "KD"], gains["height"]):
         source, count = re.subn(rf"^{name} = .*?$", f"{name} = {float(value):.9f}", source, count = 1, flags = re.M)
         if count != 1:
-            raise RuntimeError(f"Could not locate {name} in main.py.")
+            raise RuntimeError(f"Could not locate {name} in parameters.py.")
     for key, name in [("roll", "ROLL_GAINS"), ("pitch", "PITCH_GAINS"),
                       ("yaw", "YAW_GAINS"), ("x", "X_POSITION_GAINS"), ("y", "Y_POSITION_GAINS")]:
         values = ", ".join(f"{float(value):.9f}" for value in gains[key])
         source, count = re.subn(rf"^{name} = .*?$", f"{name} = np.array([{values}])", source, count = 1, flags = re.M)
         if count != 1:
-            raise RuntimeError(f"Could not locate {name} in main.py.")
+            raise RuntimeError(f"Could not locate {name} in parameters.py.")
     path.write_bytes(source.encode("utf-8"))
 
 
@@ -73,9 +80,9 @@ def main(expanded = False):
         tuner.PITCH_BOUNDS = tuner.ROLL_BOUNDS.copy()
         tuner.YAW_BOUNDS = np.array([[20, 90], [0, 0.2], [10, 65]], dtype = float)
         tuner.POSITION_BOUNDS = np.array([[0.02, 0.35], [0, 0.01], [0.06, 0.6]], dtype = float)
-        previous = Path("pid_retuning_report.json")
+        previous = output_path("pid_retuning_report.json")
         if previous.exists():
-            Path("pid_retuning_report_initial.json").write_bytes(previous.read_bytes())
+            output_path("pid_retuning_report_initial.json").write_bytes(previous.read_bytes())
     target = np.array([tuner.POSITION_TEST_DISTANCE] * 2)
     baseline_history = tuner.run_simulation(baseline, 15, target_position = target)
     baseline_combined = float(tuner.combined_validation_score(baseline_history, target))
@@ -129,7 +136,7 @@ def main(expanded = False):
               "selected_metrics": flight_metrics(best),
               "selected_validation": best_validation, "trials": trials,
               "scope": "Best tested gains for configured model and scoring; no global optimality guarantee."}
-    Path("pid_retuning_report.json").write_text(
+    output_path("pid_retuning_report.json").write_text(
         json.dumps(tuner.json_safe(report), indent = 2, allow_nan = False), encoding = "utf-8")
     if best_validation is None:
         print("No candidate passed every check; current gains retained.", flush = True)
@@ -144,7 +151,7 @@ def main(expanded = False):
     plotting.plot_data(data, show = False)
     plotting.plot_3d_trajectory(data, show = False)
     plotting.close_all()
-    print("Applied validated gains to main.py", flush = True)
+    print("Applied validated gains to parameters.py", flush = True)
     print(json.dumps(report["selected_gains"], indent = 2), flush = True)
     print("METRICS", report["baseline_metrics"], report["selected_metrics"], flush = True)
 
