@@ -36,12 +36,16 @@ def create_terrain():
 
     if TERRAIN_MODE == "landscape":
         return LandscapeTerrain(parameters.GROUND_HEIGHT, parameters.TERRAIN_SEED)
+
     if TERRAIN_MODE == "flat":
         return FlatTerrain(parameters.GROUND_HEIGHT)
+
     if TERRAIN_MODE == "hill":
         return HillTerrain(parameters.GROUND_HEIGHT, parameters.HILL_CENTER, parameters.HILL_HEIGHT, parameters.HILL_WIDTH)
+
     if TERRAIN_MODE == "slope":
         return SlopedTerrain(parameters.GROUND_HEIGHT, parameters.TERRAIN_SLOPE)
+
     raise ValueError("TERRAIN_MODE must be flat, hill, slope, or landscape.")
 
 
@@ -58,6 +62,7 @@ def create_controllers(gains = None):
     gains = current_gains() if gains is None else gains
     hover = np.sqrt(parameters.TOTAL_MASS * parameters.GRAVITY / (4 * parameters.THRUST_COEFFICIENT))
     maximum = np.sqrt(parameters.MAX_THRUST_PER_MOTOR / parameters.THRUST_COEFFICIENT)
+
     return (HeightPIDController(*gains["height"], hover, maximum),
             OrientationPIDController(gains["roll"], gains["pitch"], gains["yaw"],
                                      parameters.MAX_ORIENTATION_CORRECTION, maximum),
@@ -68,8 +73,7 @@ def create_controllers(gains = None):
 
 def create_environment():
 
-    return BasicEnvironment(WIND_MODE, parameters.WIND_VELOCITY, parameters.WIND_FORCE_COEFFICIENT,
-                            parameters.GUST_START, parameters.GUST_DURATION, parameters.GUST_PERIOD)
+    return BasicEnvironment(WIND_MODE, parameters.WIND_VELOCITY, parameters.WIND_FORCE_COEFFICIENT, parameters.GUST_START, parameters.GUST_DURATION, parameters.GUST_PERIOD)
 
 
 def control_step(drone, state, controllers, environment, target_height,
@@ -78,22 +82,26 @@ def control_step(drone, state, controllers, environment, target_height,
     """Shared control/physics step used by the mission and PID trials."""
 
     height, orientation, position = controllers
+
     if disarmed:
         state.motor_speeds.fill(0.0)
         return np.array([0.0, 0.0, target_yaw])
+
     base = height.calculate_motor_speed(target_height, state, dt, target_vertical_velocity)
-    target_orientation = (position.calculate_target_orientation(
-        target_position, target_yaw, state, dt, target_horizontal_velocity) if fixed_orientation is None
-        else np.asarray(fixed_orientation, dtype = float).copy())
+    target_orientation = (position.calculate_target_orientation(target_position, target_yaw, state, dt, target_horizontal_velocity) if fixed_orientation is None
+    else np.asarray(fixed_orientation, dtype = float).copy())
+
     factor = max(np.cos(state.orientation[0]) * np.cos(state.orientation[1]), 0.5)
-    state.motor_speeds = orientation.calculate_motor_speed(
-        base / np.sqrt(factor), target_orientation, state, dt)
+
+    state.motor_speeds = orientation.calculate_motor_speed(base / np.sqrt(factor), target_orientation, state, dt)
     force = environment.calculate_wind_force(state, current_time)
     drone.update_state(state, dt, external_force = force)
-    values = np.concatenate([state.position, state.velocity, state.orientation,
-                             state.angular_velocity, state.motor_speeds])
+
+    values = np.concatenate([state.position, state.velocity, state.orientation, state.angular_velocity, state.motor_speeds])
+
     if not np.all(np.isfinite(values)) or np.linalg.norm(state.position) > 100.0:
         raise FloatingPointError("Simulation became unstable.")
+
     return target_orientation
 
 
@@ -105,13 +113,15 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
     target_yaw = np.radians(TARGET_YAW) if target_yaw is None else target_yaw
     positive(parameters.DT, "Time step")
     positive(duration, "Simulation duration")
+
     if duration < parameters.DT:
         raise ValueError("Simulation duration must include at least one time step.")
+
     if not np.isfinite(target_yaw):
         raise ValueError("Target yaw must be finite.")
+
     terrain = create_terrain() if terrain is None else terrain
-    goal = vector([TARGET_X, TARGET_Y, TARGET_HEIGHT] if goal_position is None else goal_position,
-                  3, "Goal position")
+    goal = vector([TARGET_X, TARGET_Y, TARGET_HEIGHT] if goal_position is None else goal_position, 3, "Goal position")
     drone = create_drone(terrain)
     state = DroneState()
     state.position[2] = drone.get_ground_height(*state.position[:2])
@@ -152,6 +162,7 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
 
     if ROUTE_PLANNING_MODE not in ("astar", "straight"):
         raise ValueError("ROUTE_PLANNING_MODE must be astar or straight.")
+
     route_planner = RoutePlanner(
         start_position = state.position.copy(), goal_position = goal,
         ground_height = parameters.GROUND_HEIGHT, minimum_clearance = parameters.MINIMUM_CLEARANCE,
@@ -169,11 +180,13 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
         max_jerk = parameters.MAX_FLIGHT_JERK)
 
     #simulation loop
+
     for step in range(number_of_steps):
 
         current_time = step * parameters.DT
 
         reference_velocity = np.zeros(3)
+
         if landing_active:
             current_target = np.asarray(navigation.get_current_target()).copy()
             commanded_target = current_target.copy()
@@ -181,6 +194,7 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
             commanded_target = navigation.update(state, parameters.DT)
             reference_velocity = navigation.target_velocity.copy()
             current_target = np.asarray(navigation.get_current_target()).copy()
+
             if include_landing and navigation.mission_complete:
                 landing_active = True
                 navigation.mission_complete = False
@@ -188,6 +202,7 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
                 current_target = np.asarray(navigation.get_current_target()).copy()
                 commanded_target = current_target.copy()
                 reference_velocity.fill(0.0)
+
         active_waypoint_index = navigation.current_waypoint_index
         flight_stage = ("landed" if landed else "landing" if landing_active else
                         "climbing" if active_waypoint_index < route_planner.takeoff_waypoint_count
@@ -196,9 +211,11 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
         target_height = current_target[2]
         vertical_velocity = reference_velocity[2]
         failed = landing_controller.failed if landing_controller is not None else False
+
         if landing_active and not landed and not failed:
             commanded_target, vertical_velocity = landing_controller.target(state, parameters.DT)
             reference_velocity[2] = vertical_velocity
+
         target_orientation = control_step(
             drone, state, controllers, environment, commanded_target[2],
             commanded_target[:2], target_yaw, parameters.DT, current_time, disarmed = landed or failed,
@@ -206,13 +223,16 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
             target_horizontal_velocity = reference_velocity[:2])
         if landing_active and not landed and not failed:
             landed = landing_controller.check_touchdown(state)
+
             if landed:
                 navigation.advance_waypoint()
 
         recorded_time = (step + 1) * parameters.DT
+
         if landed:
             flight_stage = "landed"
             stage_start_times.setdefault("landed", recorded_time)
+
         height_error = target_height - state.position[2]
 
         target_position_history.append(current_target.copy())
@@ -280,8 +300,10 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
         print(f"Final route target: {waypoints[-1]}")
         print(f"Current waypoint: {navigation.current_waypoint_index + 1}/{len(waypoints)}")
         print(f"Mission complete: {navigation.mission_complete}")
+
         if landing_controller:
             print(f"Landing status: {landing_controller.phase if landing_active else 'not started'}")
+
         state.print_status()
 
     return state, simulation_data

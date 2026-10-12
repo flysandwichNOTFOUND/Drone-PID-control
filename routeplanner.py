@@ -68,9 +68,11 @@ class RoutePlanner:
         takeoff_goal = start.copy()
         takeoff_goal[2] = max(start[2], self.get_minimum_altitude(start[0], start[1]))
         target_altitude = self.cruise_altitude if target_altitude is None else target_altitude
+
         if target_altitude is not None:
             if not np.isfinite(target_altitude) or target_altitude < takeoff_goal[2]:
                 raise ValueError("Takeoff altitude must be finite and above the start and minimum clearance.")
+
             takeoff_goal[2] = target_altitude
 
         distance = self.calculate_route_distance(start, takeoff_goal)
@@ -108,6 +110,7 @@ class RoutePlanner:
         self.landing_start_index = None
         self.takeoff_waypoint_count = 0
         self.cruise_altitude = None
+
         if self.use_astar:
             pathfinder = AStarPathfinder(
                 self.terrain, self.minimum_clearance, grid_resolution = self.grid_resolution,
@@ -120,23 +123,27 @@ class RoutePlanner:
             # along the new segment is clear and its cost does not increase.
             simplified = [cruise_route[0]]
             index = 0
+
             while index < len(cruise_route) - 1:
                 next_index = index + 1
                 accumulated_cost = 0.0
+
                 for candidate in range(index + 1, len(cruise_route)):
                     accumulated_cost += pathfinder.movement_cost(cruise_route[candidate - 1], cruise_route[candidate])
+
                     if (pathfinder.movement_cost(cruise_route[index], cruise_route[candidate]) <= accumulated_cost + 1e-8
                             and pathfinder.segment_is_clear(cruise_route[index], cruise_route[candidate])):
                         next_index = candidate
+
                 simplified.append(cruise_route[next_index])
                 index = next_index
+
             cruise_route = np.asarray(simplified)
         else:
             altitude = max(self.start_position[2], self.goal_position[2],
                            self.terrain.maximum_height_along(self.start_position[:2], self.goal_position[:2])
                            + self.minimum_clearance)
-            cruise_route = np.array([np.r_[self.start_position[:2], altitude],
-                                     np.r_[self.goal_position[:2], altitude]])
+            cruise_route = np.array([np.r_[self.start_position[:2], altitude], np.r_[self.goal_position[:2], altitude]])
 
         self.cruise_altitude = float(cruise_route[0, 2])
         self.waypoints.extend(self.take_off(target_altitude = self.cruise_altitude))
@@ -145,11 +152,14 @@ class RoutePlanner:
 
         for goal in cruise_route[1:]:
             distance = self.calculate_route_distance(start, goal)
+
             if distance > 0:
                 segments = max(1, int(np.ceil(distance / self.waypoint_spacing)))
                 self.waypoints.extend(start + (i / segments) * (goal - start) for i in range(1, segments + 1))
                 self.waypoints[-1] = goal.copy()
+
             start = goal.copy()
+
         if not self.waypoints:
             self.waypoints.append(cruise_route[-1].copy())
 

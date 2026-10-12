@@ -12,12 +12,13 @@ def euler_rates(orientation, body_rates):
     roll, pitch, _ = orientation
     p, q, r = body_rates
     cosine = np.cos(pitch)
+
     if abs(cosine) < 1e-8:
         raise ValueError("Euler angle rates are undefined at vertical pitch.")
+
     coupled = q * np.sin(roll) + r * np.cos(roll)
-    return np.array([p + np.tan(pitch) * coupled,
-                     q * np.cos(roll) - r * np.sin(roll),
-                     coupled / cosine])
+
+    return np.array([p + np.tan(pitch) * coupled, q * np.cos(roll) - r * np.sin(roll), coupled / cosine])
 
 
 def integrate_orientation(orientation, body_rates, dt):
@@ -32,9 +33,7 @@ def integrate_orientation(orientation, body_rates, dt):
     cp, sp = np.cos(pitch), np.sin(pitch)
     cy, sy = np.cos(yaw), np.sin(yaw)
     w = cr * cp * cy + sr * sp * sy
-    v = np.array([sr * cp * cy - cr * sp * sy,
-                  cr * sp * cy + sr * cp * sy,
-                  cr * cp * sy - sr * sp * cy])
+    v = np.array([sr * cp * cy - cr * sp * sy, cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy])
     speed = np.linalg.norm(body_rates)
     half_angle = speed * dt / 2.0
     dw = np.cos(half_angle)
@@ -42,6 +41,7 @@ def integrate_orientation(orientation, body_rates, dt):
     quaternion = np.r_[w * dw - np.dot(v, dv),
                        w * dv + dw * v + np.cross(v, dv)]
     w, x, y, z = quaternion / np.linalg.norm(quaternion)
+
     return np.array([
         np.arctan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y)),
         np.arcsin(np.clip(2 * (w * y - z * x), -1.0, 1.0)),

@@ -150,19 +150,13 @@ GUST_PERIOD = 6.0
 
 DT = 0.005                          # seconds per step
 
-SIMULATION_TIME = 40.0            
+SIMULATION_TIME = 40.0
 
 
 # ============================================================
 # DERIVED MOTOR SPEEDS
 # ============================================================
 
-MAX_MOTOR_SPEED = np.sqrt(
-    MAX_THRUST_PER_MOTOR
-    / THRUST_COEFFICIENT
-)
+MAX_MOTOR_SPEED = np.sqrt( MAX_THRUST_PER_MOTOR / THRUST_COEFFICIENT )
 
-HOVER_SPEED = np.sqrt(
-    TOTAL_MASS * GRAVITY
-    / (4 * THRUST_COEFFICIENT)
-)
+HOVER_SPEED = np.sqrt( TOTAL_MASS * GRAVITY / (4 * THRUST_COEFFICIENT) )

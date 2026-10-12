@@ -28,12 +28,14 @@ class BasicEnvironment:
             return self.wind_velocity
 
         # No gust before gust_start
+
         if current_time < self.gust_start:
             return np.zeros(3, dtype = float)
 
         gust_time = (current_time - self.gust_start) % self.gust_period
 
         # Wind is active during the gust duration
+
         if gust_time < self.gust_duration:
             return self.wind_velocity
 

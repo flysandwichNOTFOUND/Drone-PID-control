@@ -7,12 +7,15 @@ class Navigation:
     def __init__(self, waypoints, current_waypoint_index, arrival_tolerance, speed_tolerance):
 
         self.waypoints = np.asarray(waypoints, dtype = float).copy()
+
         if (self.waypoints.ndim != 2 or self.waypoints.shape[1] != 3
                 or len(self.waypoints) == 0 or not np.all(np.isfinite(self.waypoints))):
             raise ValueError("Waypoints must be a nonempty array of finite 3D positions.")
+
         if (not isinstance(current_waypoint_index, (int, np.integer))
                 or not 0 <= current_waypoint_index < len(self.waypoints)):
             raise ValueError("Current waypoint index is out of range.")
+
         self.current_waypoint_index = current_waypoint_index
 
         self.arrival_tolerance = positive(arrival_tolerance, "Arrival tolerance", allow_zero = True)
@@ -29,11 +32,7 @@ class Navigation:
 
         x, y, z = self.get_current_target()
 
-        distance = math.sqrt(
-            (x - state.position[0])**2
- + (y - state.position[1])**2
- + (z - state.position[2])**2
-        )
+        distance = math.sqrt( (x - state.position[0])**2 + (y - state.position[1])**2 + (z - state.position[2])**2 )
 
         return distance
 
@@ -91,17 +90,20 @@ class PathFollower(Navigation):
         self.max_descent_rate = positive(max_descent_rate, "Maximum descent rate")
         self.lookahead_distance = positive(lookahead_distance, "Look-ahead distance")
         self.stop_index = len(self.waypoints) - 1 if stop_index is None else stop_index
+
         if not isinstance(self.stop_index, (int, np.integer)) or not 0 <= self.stop_index < len(self.waypoints):
             raise ValueError("Path stop index is out of range.")
 
         points = [self.start_position]
         anchors = [0]
+
         for index, point in enumerate(self.waypoints[:self.stop_index + 1]):
             if np.linalg.norm(point - points[-1]) > 1e-10:
                 points.append(point)
                 anchors.append(index + 1)
             else:
                 anchors[-1] = index + 1
+
         self.path = np.asarray(points, dtype = float)
         self.anchors = np.asarray(anchors)
         differences = np.diff(self.path, axis = 0)
@@ -109,11 +111,14 @@ class PathFollower(Navigation):
         self.distances = np.r_[0.0, np.cumsum(self.lengths)]
         self.directions = differences / self.lengths[:, None] if len(self.lengths) else differences
         corners = [0]
+
         for index in range(1, len(self.directions)):
             if np.dot(self.directions[index - 1], self.directions[index]) < 1.0 - 1e-8:
                 corners.append(index)
+
         if len(self.path) > 1:
             corners.append(len(self.path) - 1)
+
         self.corners = corners
         self.reset()
 
@@ -138,8 +143,10 @@ class PathFollower(Navigation):
     def update(self, state, dt):
 
         dt = positive(dt, "Time step")
+
         if self.mission_complete:
             return self.target_position.copy()
+
         if len(self.path) == 1:
             self.current_waypoint_index = self.stop_index
             self.mission_complete = self.check_arrival(state)
@@ -150,6 +157,7 @@ class PathFollower(Navigation):
         direction = (end - start) / np.linalg.norm(end - start)
         length = self.distances[last] - self.distances[first]
         speed_limit = self.max_speed
+
         if abs(direction[2]) > 1e-10:
             vertical_limit = self.max_climb_rate if direction[2] > 0 else self.max_descent_rate
             speed_limit = min(speed_limit, vertical_limit / abs(direction[2]))
@@ -158,9 +166,7 @@ class PathFollower(Navigation):
         acceleration = self.max_acceleration / 2.0
         jerk = self.max_jerk / 2.0
         # Exact maxima of the quintic's normalized first three derivatives.
-        total_time = max(1.875 * length / speed_limit,
-                         np.sqrt((10.0 / np.sqrt(3.0)) * length / acceleration),
-                         np.cbrt(60.0 * length / jerk))
+        total_time = max(1.875 * length / speed_limit, np.sqrt((10.0 / np.sqrt(3.0)) * length / acceleration), np.cbrt(60.0 * length / jerk))
         measured_progress = np.clip(np.dot(state.position - start, direction), 0.0, length)
         lead = self.progress - self.distances[first] - measured_progress
         # Two cascaded filters keep the clock rate and its derivative continuous.
@@ -176,9 +182,7 @@ class PathFollower(Navigation):
         decay = np.exp(-clock_gain * dt)
         input_error = self.clock_input - desired_clock_rate
         rate_error = self.clock_rate - desired_clock_rate
-        increment = (desired_clock_rate * dt
-                     + (rate_error + input_error) * (-np.expm1(-clock_gain * dt)) / clock_gain
-                     - input_error * dt * decay)
+        increment = (desired_clock_rate * dt + (rate_error + input_error) * (-np.expm1(-clock_gain * dt)) / clock_gain - input_error * dt * decay)
         self.clock_input = desired_clock_rate + input_error * decay
         self.clock_rate = desired_clock_rate + (rate_error + clock_gain * dt * input_error) * decay
         clock_derivative = clock_gain * (self.clock_input - self.clock_rate)
@@ -191,12 +195,12 @@ class PathFollower(Navigation):
 
         self.target_position = start + direction * distance
         self.target_velocity = direction * speed * self.clock_rate
-        self.target_acceleration = direction * (profile_acceleration * self.clock_rate**2
-                                                + speed * clock_derivative)
+        self.target_acceleration = direction * (profile_acceleration * self.clock_rate**2 + speed * clock_derivative)
         self.progress = self.distances[first] + distance
         segment = min(len(self.path) - 2, np.searchsorted(self.distances, self.progress, side = "right") - 1)
         self.current_waypoint_index = min(self.stop_index, int(self.anchors[segment + 1]) - 1)
         self.profile_finished = self.elapsed >= total_time
+
         if self.profile_finished:
             self.target_velocity.fill(0.0)
             self.target_acceleration.fill(0.0)
@@ -210,5 +214,6 @@ class PathFollower(Navigation):
                     self.elapsed = 0.0
                     self.clock_rate = 1.0
                     self.clock_input = 1.0
+
         return self.target_position.copy()
 

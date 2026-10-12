@@ -30,20 +30,23 @@ def mark_flight_stages(axes, stage_start_times):
     colors = {"climbing": "#567a35", "flying": "#206593",
               "landing": "#aa6632", "landed": "#656565"}
     events = [(stage, time) for stage, time in stage_start_times.items() if stage in colors]
+
     for ax in axes:
         right_edge = ax.get_xlim()[1]
+
         for index, (stage, start_time) in enumerate(events):
             if stage not in colors:
                 continue
+
             color = colors[stage]
-            ax.axvline(start_time, color = color, linestyle = ":", linewidth = 1.2, alpha = 0.8,
-                       gid = f"stage-{stage}")
+            ax.axvline(start_time, color = color, linestyle = ":", linewidth = 1.2, alpha = 0.8, gid = f"stage-{stage}")
             end_time = events[index + 1][1] if index + 1 < len(events) else right_edge
             label_time = (start_time + end_time) / 2
             ax.annotate(stage.capitalize(), (label_time, 1.0),
                         xycoords = ax.get_xaxis_transform(), xytext = (0, 4),
                         textcoords = "offset points", color = color, fontsize = 8,
                         ha = "center", va = "bottom", annotation_clip = False)
+
         ax.set_title(ax.get_title(), pad = 26)
 
 
@@ -72,8 +75,10 @@ def plot_data(simulation_data, *, show = True):
     plt.subplot(3, 2, 1)
     plt.plot(time_history, height_history, label = "Actual height")
     plt.step(time_history, target_position_history[:, 2], color = "red", linestyle = "--", where = "post", label = "Target height")
+
     if "ground_height_history" in simulation_data:
         plt.plot(time_history, simulation_data["ground_height_history"], color = "olivedrab", label = "Ground elevation")
+
     plt.xlabel("Time (s)")
     plt.ylabel("Height (m)")
     plt.title("Drone Altitude")
@@ -145,8 +150,10 @@ def plot_data(simulation_data, *, show = True):
     figure.subplots_adjust(hspace = 0.55)
     plt.tight_layout(h_pad = 2.0)
     plt.savefig(output_path("altitude_control_results.png"), dpi = 300)
+
     if show:
         plt.show()
+
     return figure
 
 def plot_3d_trajectory(simulation_data, *, show = True):
@@ -161,29 +168,26 @@ def plot_3d_trajectory(simulation_data, *, show = True):
 
     all_points = np.vstack((positions, waypoints))
     map_points = np.vstack((all_points[:, :2], getattr(terrain, "center", all_points[0, :2])))
+
     if hasattr(terrain, "plot_bounds"):
         xmin, xmax, ymin, ymax = terrain.plot_bounds
         map_points = np.vstack((map_points, [[xmin, ymin], [xmax, ymax]]))
+
     lower = map_points.min(axis = 0)
     upper = map_points.max(axis = 0)
     center = (lower + upper) / 2.0
-    span = max(TERRAIN_PLOT_SPAN, float(np.max(upper - lower)) *
-               (1.0 if hasattr(terrain, "plot_bounds") else 1.3))
+    span = max(TERRAIN_PLOT_SPAN, float(np.max(upper - lower)) * (1.0 if hasattr(terrain, "plot_bounds") else 1.3))
     x_limits = (center[0] - span / 2, center[0] + span / 2)
     y_limits = (center[1] - span / 2, center[1] + span / 2)
-    terrain_x, terrain_y = np.meshgrid(
-        np.linspace(*x_limits, 220), np.linspace(*y_limits, 220))
+    terrain_x, terrain_y = np.meshgrid( np.linspace(*x_limits, 220), np.linspace(*y_limits, 220))
     terrain_z = terrain.height(terrain_x, terrain_y)
-    terrain_colors = LinearSegmentedColormap.from_list(
-        "landscape", ["#315646", "#6b8c58", "#aaa178", "#a9957b", "#c4b497"])
+    terrain_colors = LinearSegmentedColormap.from_list( "landscape", ["#315646", "#6b8c58", "#aaa178", "#a9957b", "#c4b497"])
     colors = LightSource(azdeg = 315, altdeg = 45).shade(
         terrain_z, cmap = terrain_colors, vert_exag = 1.0, blend_mode = "soft",
         dx = span / 219, dy = span / 219,
         vmin = float(np.min(terrain_z)),
         vmax = max(float(np.max(terrain_z)), float(np.min(terrain_z)) + 0.01))
-    ax.plot_surface(terrain_x, terrain_y, terrain_z, facecolors = colors,
-                    linewidth = 0, antialiased = False, shade = False,
-                    rcount = 220, ccount = 220, zorder = 1)
+    ax.plot_surface(terrain_x, terrain_y, terrain_z, facecolors = colors, linewidth = 0, antialiased = False, shade = False, rcount = 220, ccount = 220, zorder = 1)
 
     ax.plot(positions[:, 0], positions[:, 1], positions[:, 2], color = "tab:blue", label = "Actual trajectory")
     ax.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2], color = "tab:orange", linestyle = "--", marker = "o", label = "Planned route")
@@ -198,20 +202,20 @@ def plot_3d_trajectory(simulation_data, *, show = True):
     ax.set_xlim(*x_limits)
     ax.set_ylim(*y_limits)
     z_lower = min(float(np.min(terrain_z)), float(all_points[:, 2].min()))
-    z_upper = max(ground_height + 6.0, float(all_points[:, 2].max()) + 1.0,
-                  float(np.max(terrain_z)) + 1.0)
+    z_upper = max(ground_height + 6.0, float(all_points[:, 2].max()) + 1.0, float(np.max(terrain_z)) + 1.0)
     ax.set_zlim(z_lower, z_upper)
     # Match the axes' physical spans so terrain and flight retain their proportions.
     ax.set_box_aspect((span, span, z_upper - z_lower))
     ax.view_init(elev = 28, azim = -60)
 
     handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles + [Patch(facecolor = "olivedrab", alpha = 0.85)], labels + ["Terrain"],
-              loc = "upper left", fontsize = 8)
+    ax.legend(handles + [Patch(facecolor = "olivedrab", alpha = 0.85)], labels + ["Terrain"], loc = "upper left", fontsize = 8)
     plt.tight_layout()
     plt.savefig(output_path("drone_3d_trajectory.png"), dpi = 300)
+
     if show:
         plt.show()
+
     return fig
 
 def plot_validation(history, *, target_height, hover_speed, max_motor_speed, show = True):
@@ -225,69 +229,30 @@ def plot_validation(history, *, target_height, hover_speed, max_motor_speed, sho
     velocity = data["velocity"]
     motor_speeds = data["motor_speeds"]
 
-    orientation_degrees = np.degrees(
-        data["orientation"]
-    )
+    orientation_degrees = np.degrees( data["orientation"] )
 
-    target_orientation_degrees = np.degrees(
-        data["target_orientation"]
-    )
+    target_orientation_degrees = np.degrees( data["target_orientation"] )
 
     target_position = data["target_position"]
 
-    figure, axes = plt.subplots(
-        3,
-        2,
-        figsize = (12, 12),
-    )
+    figure, axes = plt.subplots( 3, 2, figsize = (12, 12), )
 
-    axes[0, 0].plot(
-        time,
-        position[:, 2],
-        label = "Actual height",
-    )
-    axes[0, 0].axhline(
-        target_height,
-        color = "red",
-        linestyle = "--",
-        label = "Target height",
-    )
+    axes[0, 0].plot( time, position[:, 2], label = "Actual height", )
+    axes[0, 0].axhline( target_height, color = "red", linestyle = "--", label = "Target height", )
     axes[0, 0].set_title("Drone Altitude")
     axes[0, 0].set_ylabel("Height (m)")
     axes[0, 0].legend()
 
-    axes[0, 1].plot(
-        time,
-        velocity[:, 2],
-        color = "tab:orange",
-    )
-    axes[0, 1].axhline(
-        0.0,
-        color = "black",
-        linestyle = "--",
-    )
+    axes[0, 1].plot( time, velocity[:, 2], color = "tab:orange", )
+    axes[0, 1].axhline( 0.0, color = "black", linestyle = "--", )
     axes[0, 1].set_title("Vertical Velocity")
     axes[0, 1].set_ylabel("Vertical velocity (m/s)")
 
     for motor_index in range(4):
-        axes[1, 0].plot(
-            time,
-            motor_speeds[:, motor_index],
-            label = f"Motor {motor_index + 1}",
-        )
+        axes[1, 0].plot( time, motor_speeds[:, motor_index], label = f"Motor {motor_index + 1}", )
 
-    axes[1, 0].axhline(
-        hover_speed,
-        color = "red",
-        linestyle = "--",
-        label = "Hover speed",
-    )
-    axes[1, 0].axhline(
-        max_motor_speed,
-        color = "purple",
-        linestyle = "--",
-        label = "Maximum motor speed",
-    )
+    axes[1, 0].axhline( hover_speed, color = "red", linestyle = "--", label = "Hover speed", )
+    axes[1, 0].axhline( max_motor_speed, color = "purple", linestyle = "--", label = "Maximum motor speed", )
     axes[1, 0].set_title("Motor Speeds")
     axes[1, 0].set_ylabel("Motor speed (rad/s)")
     axes[1, 0].legend(fontsize = 8)
@@ -296,50 +261,17 @@ def plot_validation(history, *, target_height, hover_speed, max_motor_speed, sho
     colors = ["tab:blue", "tab:orange", "tab:green"]
 
     for axis_index, label in enumerate(labels):
-        axes[1, 1].plot(
-            time,
-            orientation_degrees[:, axis_index],
-            color = colors[axis_index],
-            label = f"Actual {label}",
-        )
-        axes[1, 1].plot(
-            time,
-            target_orientation_degrees[:, axis_index],
-            color = colors[axis_index],
-            linestyle = "--",
-            label = f"Target {label}",
-        )
+        axes[1, 1].plot( time, orientation_degrees[:, axis_index], color = colors[axis_index], label = f"Actual {label}", )
+        axes[1, 1].plot( time, target_orientation_degrees[:, axis_index], color = colors[axis_index], linestyle = "--", label = f"Target {label}", )
 
     axes[1, 1].set_title("Orientation Tracking")
     axes[1, 1].set_ylabel("Orientation (degrees)")
     axes[1, 1].legend(fontsize = 7)
 
-    axes[2, 0].plot(
-        time,
-        position[:, 0],
-        color = "tab:blue",
-        label = "X position",
-    )
-    axes[2, 0].plot(
-        time,
-        position[:, 1],
-        color = "tab:orange",
-        label = "Y position",
-    )
-    axes[2, 0].plot(
-        time,
-        target_position[:, 0],
-        color = "tab:blue",
-        linestyle = "--",
-        label = "Target X",
-    )
-    axes[2, 0].plot(
-        time,
-        target_position[:, 1],
-        color = "tab:orange",
-        linestyle = "--",
-        label = "Target Y",
-    )
+    axes[2, 0].plot( time, position[:, 0], color = "tab:blue", label = "X position", )
+    axes[2, 0].plot( time, position[:, 1], color = "tab:orange", label = "Y position", )
+    axes[2, 0].plot( time, target_position[:, 0], color = "tab:blue", linestyle = "--", label = "Target X", )
+    axes[2, 0].plot( time, target_position[:, 1], color = "tab:orange", linestyle = "--", label = "Target Y", )
     axes[2, 0].set_title("Horizontal Position")
     axes[2, 0].set_ylabel("Position (m)")
     axes[2, 0].legend(fontsize = 8)
@@ -352,10 +284,9 @@ def plot_validation(history, *, target_height, hover_speed, max_motor_speed, sho
             axis.grid(True)
 
     figure.tight_layout()
-    figure.savefig(
-        output_path("auto_tune_results.png"),
-        dpi = 200,
-    )
+    figure.savefig( output_path("auto_tune_results.png"), dpi = 200, )
+
     if show:
         plt.show()
+
     return figure

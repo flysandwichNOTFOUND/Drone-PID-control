@@ -12,13 +12,17 @@ class Drone:
         self.arm_len = positive(arm_len, "Arm length")
         self.max_thrust_per_motor = positive(max_thrust_per_motor, "Maximum thrust")
         self.moi = vector(moi, 3, "Moment of inertia")
+
         if np.any(self.moi <= 0):
             raise ValueError("Moment of inertia must be positive on each axis.")
+
         self.thrust_coe = positive(thrust_coe, "Thrust coefficient")
         self.torque_coe = positive(torque_coe, "Torque coefficient", allow_zero = True)
         self.ground_height = float(ground_height)
+
         if not np.isfinite(self.ground_height):
             raise ValueError("Ground height must be finite.")
+
         self.terrain = terrain if terrain is not None else FlatTerrain(self.ground_height)
 
     def get_ground_height(self, x, y):
@@ -28,8 +32,10 @@ class Drone:
     def motor_thrusts(self, state):
 
         speeds = vector(state.motor_speeds, 4, "Motor speeds")
+
         if np.any(speeds < 0):
             raise ValueError("Motor speeds must be nonnegative.")
+
         raw_thrusts = self.thrust_coe * speeds**2
 
         excess = np.maximum(raw_thrusts - self.max_thrust_per_motor, 0)
@@ -100,12 +106,7 @@ class Drone:
         pitch_torque = self.arm_len * (thrusts[2] - thrusts[0])
 
         effective_speed_squared = thrusts / self.thrust_coe
-        yaw_torque = self.torque_coe * (
-            effective_speed_squared[0]
- - effective_speed_squared[1]
- + effective_speed_squared[2]
- - effective_speed_squared[3]
-        )
+        yaw_torque = self.torque_coe * ( effective_speed_squared[0] - effective_speed_squared[1] + effective_speed_squared[2] - effective_speed_squared[3] )
 
         torques = np.array([roll_torque, pitch_torque, yaw_torque])
 
@@ -145,11 +146,13 @@ class Drone:
         ground = self.get_ground_height(*state.position[:2])
         state.ground_contact = state.position[2] <= ground
         state.contact_speed = 0.0
+
         if state.ground_contact:
             state.position[2] = ground
             normal = self.terrain.normal(*state.position[:2])
             normal_speed = np.dot(state.velocity, normal)
             state.contact_speed = max(-normal_speed, 0.0)
+
             if normal_speed < 0:
                 state.velocity -= normal_speed * normal
 

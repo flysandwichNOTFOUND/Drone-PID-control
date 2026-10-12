@@ -16,6 +16,7 @@ class HeightPIDController:
     def calculate_motor_speed(self, target_height, state, dt, target_vertical_velocity = 0.0):
 
         dt = positive(dt, "Time step")
+
         if not np.isfinite(target_height) or not np.isfinite(target_vertical_velocity):
             raise ValueError("Target height and vertical velocity must be finite.")
 
@@ -50,11 +51,7 @@ class OrientationPIDController:
         self.pitch_gains = gains(pitch_gains, "Pitch gains")
         self.yaw_gains = gains(yaw_gains, "Yaw gains")
 
-        self.gains = np.array([
-            self.roll_gains,
-            self.pitch_gains,
-            self.yaw_gains
-        ])
+        self.gains = np.array([ self.roll_gains, self.pitch_gains, self.yaw_gains ])
 
         self.max_correction = positive(max_correction, "Maximum correction")
         self.max_motor_speed = positive(max_motor_speed, "Maximum motor speed")
@@ -85,8 +82,7 @@ class OrientationPIDController:
         # Freeze only integral changes that drive further into saturation.
         blocked = ki * (self.integral_error - previous_integral) * (corrections - limited) > 0
         self.integral_error[blocked] = previous_integral[blocked]
-        corrections = np.clip(kp * error + ki * self.integral_error + kd * derivative_error,
-                              -self.max_correction, self.max_correction)
+        corrections = np.clip(kp * error + ki * self.integral_error + kd * derivative_error, -self.max_correction, self.max_correction)
 
         return corrections
 
@@ -113,16 +109,17 @@ class OrientationPIDController:
         limited = np.clip(motor_speeds, 0.0, self.max_motor_speed)
         mixer = np.array([[0, -1, 1], [1, 0, -1], [0, 1, 1], [-1, 0, -1]], dtype = float)
         realized = np.linalg.pinv(mixer) @ (limited - base_speed)
-        blocked = (self.gains[:, 1] * (self.integral_error - previous_integral)
- * (corrections - realized) > 1e-12)
+        blocked = (self.gains[:, 1] * (self.integral_error - previous_integral) * (corrections - realized) > 1e-12)
+
         if np.any(blocked):
             self.integral_error[blocked] = previous_integral[blocked]
             error = vector(target_orientation, 3, "Target orientation") - state.orientation
             error[2] = wrap_angle(error[2])
             corrections = np.clip(self.gains[:, 0] * error + self.gains[:, 1] * self.integral_error
- - self.gains[:, 2] * euler_rates(state.orientation, state.angular_velocity),
+                - self.gains[:, 2] * euler_rates(state.orientation, state.angular_velocity),
                                   -self.max_correction, self.max_correction)
             limited = np.clip(base_speed + mixer @ corrections, 0.0, self.max_motor_speed)
+
         motor_speeds = limited
 
         return motor_speeds
@@ -134,6 +131,7 @@ class PositionPIDController:
         self.x_gains = gains(x_gains, "X gains")
         self.y_gains = gains(y_gains, "Y gains")
         self.max_tilt = positive(max_tilt, "Maximum tilt")
+
         if self.max_tilt >= np.pi / 2:
             raise ValueError("Maximum tilt must be less than 90 degrees.")
 
@@ -148,8 +146,10 @@ class PositionPIDController:
 
         dt = positive(dt, "Time step")
         target_position = vector(target_position, 2, "Target position")
+
         if not np.isfinite(target_yaw):
             raise ValueError("Target yaw must be finite.")
+
         target_velocity = np.zeros(2) if target_velocity is None else vector(target_velocity, 2, "Target velocity")
         x_error = target_position[0] - state.position[0]
         y_error = target_position[1] - state.position[1]
@@ -181,14 +181,18 @@ class PositionPIDController:
         pitch_command = np.clip(pitch_command, -self.max_tilt, self.max_tilt)
 
         tilt_command = np.array([roll_command, pitch_command])
+
         if self.tilt_smoothing_time > 0 or self.max_tilt_rate is not None:
             if self.previous_tilt_command is None:
                 self.previous_tilt_command = np.clip(state.orientation[:2], -self.max_tilt, self.max_tilt).copy()
+
             # Filter from the previous applied command, then cap each axis's rate.
             alpha = -np.expm1(-dt / self.tilt_smoothing_time) if self.tilt_smoothing_time > 0 else 1.0
             change = alpha * (tilt_command - self.previous_tilt_command)
+
             if self.max_tilt_rate is not None:
                 change = np.clip(change, -self.max_tilt_rate * dt, self.max_tilt_rate * dt)
+
             tilt_command = self.previous_tilt_command + change
             self.previous_tilt_command = tilt_command.copy()
 
