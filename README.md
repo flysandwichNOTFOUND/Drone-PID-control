@@ -28,6 +28,16 @@ The simulation prints its final state and saves graphs without opening plot wind
 - `outputs/altitude_control_results.png`: flight stages, position, velocity, orientation, motor speeds, and waypoint tracking.
 - `outputs/drone_3d_trajectory.png`: planned route and actual flight over terrain.
 
+## Example results
+
+![Altitude and flight control results](outputs/altitude_control_results.png)
+
+The control dashboard compares actual flight with commanded altitude, position, and orientation. It also shows vertical velocity, motor speeds, waypoint distance, and flight stages. In `safe_nearby` mode, the label identifies the selected landing coordinates, which may differ from the requested destination.
+
+![Drone trajectory over terrain](outputs/drone_3d_trajectory.png)
+
+The 3D graph overlays the actual trajectory and planned route on the terrain, with markers for the start, route endpoint, and final position. The drone adjusts its flight height for terrain clearance and descends to the selected landing site. These images reflect the last saved simulation run.
+
 ## Configuration
 
 Edit mission targets and modes in `main.py`:
