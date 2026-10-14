@@ -109,10 +109,20 @@ LANDING_DESCENT_SPEED = 0.4
 
 LANDING_FLARE_SPEED = 0.12
 
-LANDING_FLARE_HEIGHT = 0.5
+LANDING_FLARE_HEIGHT = 0.8
+
+LANDING_APPROACH_GAIN = 0.5       # 1/s
+LANDING_TOUCHDOWN_SPEED = 0.02    # m/s
 
 MAX_LANDING_SLOPE_DEGREES = 20.0
 
+LANDING_SEARCH_RADIUS = 3.0       # m
+
+LANDING_SEARCH_RESOLUTION = 0.25  # m
+
+LANDING_MAX_ACCELERATION = 0.3    # m/s²
+
+LANDING_MAX_JERK = 0.5            # m/s³
 
 # ============================================================
 # TERRAIN
@@ -160,3 +170,18 @@ SIMULATION_TIME = 40.0
 MAX_MOTOR_SPEED = np.sqrt( MAX_THRUST_PER_MOTOR / THRUST_COEFFICIENT )
 
 HOVER_SPEED = np.sqrt( TOTAL_MASS * GRAVITY / (4 * THRUST_COEFFICIENT) )
+
+# ============================================================
+#MISSION TARGET AND MODE SELECTION
+# ============================================================
+
+TARGET_YAW = 0
+TARGET_HEIGHT = 2.0
+TARGET_X = 10
+TARGET_Y = 6
+
+# MODE SELECTION
+ROUTE_PLANNING_MODE = "astar"     # "astar" or "straight"
+TERRAIN_MODE = "landscape"  # "flat", "hill", "slope", "landscape"
+WIND_MODE = "none"  #"none", "constant", "gust"
+LANDING_MODE = "safe_nearby"  # "strict", "safe_nearby", "exact"

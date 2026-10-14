@@ -10,17 +10,16 @@ from validation import positive, vector
 from terrain import FlatTerrain, HillTerrain, SlopedTerrain, LandscapeTerrain
 from landing import LandingController
 
-
-# MISSION TARGETS
 TARGET_YAW = 0
 TARGET_HEIGHT = 2.0
-TARGET_X = 12
+TARGET_X = 10
 TARGET_Y = 6
 
 # MODE SELECTION
 ROUTE_PLANNING_MODE = "astar"     # "astar" or "straight"
-TERRAIN_MODE = "hill"  # "flat", "hill", "slope", "landscape"
+TERRAIN_MODE = "landscape"  # "flat", "hill", "slope", "landscape"
 WIND_MODE = "none"  #"none", "constant", "gust"
+LANDING_MODE = "exact"  # "strict", "safe_nearby", "exact"
 
 
 def current_gains():
@@ -122,14 +121,28 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
 
     terrain = create_terrain() if terrain is None else terrain
     goal = vector([TARGET_X, TARGET_Y, TARGET_HEIGHT] if goal_position is None else goal_position, 3, "Goal position")
+    requested_goal = goal.copy()
+
     drone = create_drone(terrain)
     state = DroneState()
     state.position[2] = drone.get_ground_height(*state.position[:2])
+
     landing_controller = (LandingController(
         terrain, goal[:2], parameters.LANDING_DESCENT_SPEED, parameters.LANDING_FLARE_SPEED,
         parameters.LANDING_FLARE_HEIGHT, speed_tolerance = parameters.SPEED_TOLERANCE,
-        max_slope_degrees = parameters.MAX_LANDING_SLOPE_DEGREES, footprint_radius = parameters.ARM_LENGTH)
+        max_slope_degrees = parameters.MAX_LANDING_SLOPE_DEGREES,
+        footprint_radius = parameters.ARM_LENGTH, mode = LANDING_MODE,
+        search_radius = parameters.LANDING_SEARCH_RADIUS,
+        search_resolution = parameters.LANDING_SEARCH_RESOLUTION,
+        max_acceleration = parameters.LANDING_MAX_ACCELERATION,
+        max_jerk = parameters.LANDING_MAX_JERK,
+        approach_gain = parameters.LANDING_APPROACH_GAIN,
+        touchdown_speed = parameters.LANDING_TOUCHDOWN_SPEED)
         if include_landing else None)
+
+    if landing_controller is not None:
+        goal[:2] = landing_controller.target_xy
+
     landing_active = False
     hover_speed = np.sqrt(parameters.TOTAL_MASS * parameters.GRAVITY / (4.0 * parameters.THRUST_COEFFICIENT))
     controllers = create_controllers(gains)
@@ -290,7 +303,11 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
         "waypoints": np.asarray(waypoints, dtype = float),
         "route_planning_mode": ROUTE_PLANNING_MODE,
         "mission_complete": navigation.mission_complete,
-        "landed": landed
+        "landed": landed,
+        "landing_mode": LANDING_MODE if landing_controller is not None else None,
+        "requested_destination": requested_goal.copy(),
+        "selected_destination": goal.copy(),
+        "landing_site_offset": float(np.linalg.norm(goal[:2] - requested_goal[:2]))
     }
 
     if verbose:
@@ -301,8 +318,11 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
         print(f"Current waypoint: {navigation.current_waypoint_index + 1}/{len(waypoints)}")
         print(f"Mission complete: {navigation.mission_complete}")
 
-        if landing_controller:
-            print(f"Landing status: {landing_controller.phase if landing_active else 'not started'}")
+    if landing_controller is not None:
+        print(f"Landing mode: {LANDING_MODE}")
+        print(f"Requested landing XY: {requested_goal[:2]}")
+        print(f"Selected landing XY: {landing_controller.target_xy}")
+        print(f"Landing site offset: {np.linalg.norm(goal[:2] - requested_goal[:2]):.3f} m")
 
         state.print_status()
 

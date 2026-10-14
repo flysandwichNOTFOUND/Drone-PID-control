@@ -24,6 +24,19 @@ def close_all():
     plt.close("all")
 
 
+def landing_label(simulation_data):
+    """Describe the landing mode and any selected nearby destination."""
+
+    mode = simulation_data.get("landing_mode", "unspecified")
+    label = f"Landing mode: {mode if mode is not None else 'disabled'}"
+
+    if mode == "safe_nearby" and "selected_destination" in simulation_data:
+        x, y = simulation_data["selected_destination"][:2]
+        label += f"\nSelected landing XY: ({x:.2f}, {y:.2f}) m"
+
+    return label
+
+
 def mark_flight_stages(axes, stage_start_times):
     """Mark actual mission stage starts consistently across time-series panels."""
 
@@ -70,6 +83,7 @@ def plot_data(simulation_data, *, show = True):
         raise ValueError("orientation_history must contain one [roll, pitch, yaw] array for every timestep.")
 
     figure = plt.figure(figsize = (12, 12))
+    figure.suptitle(landing_label(simulation_data), fontsize = 13)
 
     # Plot 1: Altitude
     plt.subplot(3, 2, 1)
@@ -148,7 +162,7 @@ def plot_data(simulation_data, *, show = True):
 
     mark_flight_stages(figure.axes, simulation_data.get("stage_start_times", {}))
     figure.subplots_adjust(hspace = 0.55)
-    plt.tight_layout(h_pad = 2.0)
+    plt.tight_layout(h_pad = 2.0, rect = (0, 0, 1, 0.94))
     plt.savefig(output_path("altitude_control_results.png"), dpi = 300)
 
     if show:
@@ -164,6 +178,7 @@ def plot_3d_trajectory(simulation_data, *, show = True):
     waypoints = np.asarray(simulation_data["waypoints"], dtype = float)
 
     fig = plt.figure(figsize = (10, 8))
+    fig.suptitle(landing_label(simulation_data), fontsize = 13)
     ax = fig.add_subplot(111, projection = "3d", computed_zorder = False)
 
     all_points = np.vstack((positions, waypoints))
@@ -210,7 +225,7 @@ def plot_3d_trajectory(simulation_data, *, show = True):
 
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles + [Patch(facecolor = "olivedrab", alpha = 0.85)], labels + ["Terrain"], loc = "upper left", fontsize = 8)
-    plt.tight_layout()
+    plt.tight_layout(rect = (0, 0, 1, 0.92))
     plt.savefig(output_path("drone_3d_trajectory.png"), dpi = 300)
 
     if show:
