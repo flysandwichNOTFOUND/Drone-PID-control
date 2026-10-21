@@ -12,17 +12,15 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from project_paths import PROJECT_ROOT, output_path
+from drone_sim.configuration.project_paths import PROJECT_ROOT, output_path
 
-import plotting
+from drone_sim.visualization import plotting
 plotting.use_backend("Agg")
 import numpy as np
 
 from tools import auto_tune_pid as tuner
-import main as mission
-import parameters
-
-
+from drone_sim import main as mission
+from drone_sim.configuration import parameters
 def flight_metrics(gains, yaw = 0.0, landing = False):
 
     state, data = mission.run_simulation(
@@ -47,7 +45,7 @@ def flight_metrics(gains, yaw = 0.0, landing = False):
 
 def apply_gains(gains):
 
-    path = PROJECT_ROOT / "parameters.py"
+    path = PROJECT_ROOT / "drone_sim" / "configuration" / "parameters.py"
     source = path.read_text(encoding = "utf-8")
     for name, value in zip(["KP", "KI", "KD"], gains["height"]):
         source, count = re.subn(rf"^{name} = .*?$", f"{name} = {float(value):.9f}", source, count = 1, flags = re.M)

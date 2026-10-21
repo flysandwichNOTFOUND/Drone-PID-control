@@ -1,14 +1,16 @@
 import numpy as np
-import parameters
+from copy import copy
+from drone_sim.configuration import parameters
+from drone_sim.planning.pathfinding import NoPathError
 
-from testing import Drone, DroneState
-from controllerV1 import HeightPIDController, OrientationPIDController, PositionPIDController
-from environment import BasicEnvironment
-from navigation import PathFollower
-from routeplanner import RoutePlanner
-from validation import positive, vector
-from terrain import FlatTerrain, HillTerrain, SlopedTerrain, LandscapeTerrain
-from landing import LandingController
+from drone_sim.physics.dynamics import Drone, DroneState
+from drone_sim.control.controllerV1 import HeightPIDController, OrientationPIDController, PositionPIDController
+from drone_sim.world.environment import BasicEnvironment
+from drone_sim.control.navigation import PathFollower
+from drone_sim.planning.routeplanner import RoutePlanner
+from drone_sim.validation import positive, vector
+from drone_sim.world.terrain import FlatTerrain, HillTerrain, SlopedTerrain, LandscapeTerrain
+from drone_sim.control.landing import LandingController
 
 TARGET_YAW = 0
 TARGET_HEIGHT = 2.0
@@ -16,10 +18,11 @@ TARGET_X = 10
 TARGET_Y = 6
 
 # MODE SELECTION
+PHYSICS_BACKEND = "simulation"      # "simulation" or "gym_pybullet" (adapter scaffold only)
 ROUTE_PLANNING_MODE = "astar"     # "astar" or "straight"
-TERRAIN_MODE = "landscape"  # "flat", "hill", "slope", "landscape"
+TERRAIN_MODE = "hill"  # "flat", "hill", "slope", "landscape"
 WIND_MODE = "none"  #"none", "constant", "gust"
-LANDING_MODE = "exact"  # "strict", "safe_nearby", "exact"
+LANDING_MODE = "safe_nearby"  # "strict", "safe_nearby", "exact"
 
 
 def current_gains():
@@ -49,6 +52,21 @@ def create_terrain():
 
 
 def create_drone(terrain = None):
+    """Input: optional terrain. Output: selected physics backend.
+
+    Source: PHYSICS_BACKEND above and drone properties in parameters.py.
+    Caller: run_simulation(), tuning tools, and tests.
+    """
+
+    if PHYSICS_BACKEND not in ("simulation", "gym_pybullet"):
+        raise ValueError("PHYSICS_BACKEND must be simulation or gym_pybullet.")
+
+    if PHYSICS_BACKEND == "gym_pybullet":
+        from drone_sim.physics.gym_backend import GymPyBulletDrone
+
+        return GymPyBulletDrone(
+            config = parameters,
+            terrain = create_terrain() if terrain is None else terrain)
 
     return Drone(parameters.TOTAL_MASS, parameters.ARM_LENGTH, parameters.MAX_THRUST_PER_MOTOR,
                  parameters.MOMENT_OF_INERTIA, parameters.THRUST_COEFFICIENT, parameters.TORQUE_COEFFICIENT,
@@ -184,6 +202,18 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
         search_margin = parameters.ASTAR_SEARCH_MARGIN, climb_weight = parameters.ASTAR_CLIMB_WEIGHT,
         maximum_altitude = parameters.ASTAR_MAXIMUM_ALTITUDE, clearance_margin = parameters.ASTAR_CLEARANCE_MARGIN)
     waypoints = route_planner.generate_route(include_landing = include_landing)
+    requested_waypoints = None
+    requested_route_error = None
+
+    if include_landing and LANDING_MODE == "safe_nearby":
+        requested_planner = copy(route_planner)
+        requested_planner.goal_position = requested_goal.copy()
+
+        try:
+            requested_waypoints = np.asarray(requested_planner.generate_route(include_landing = True), dtype = float)
+        except NoPathError as error:
+            requested_route_error = str(error)
+
     stop_index = route_planner.landing_start_index - 1 if include_landing else len(waypoints) - 1
     navigation = PathFollower(
         waypoints, state.position.copy(), parameters.ARRIVAL_TOLERANCE, parameters.SPEED_TOLERANCE,
@@ -306,6 +336,8 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
         "landed": landed,
         "landing_mode": LANDING_MODE if landing_controller is not None else None,
         "requested_destination": requested_goal.copy(),
+        "requested_waypoints": requested_waypoints,
+        "requested_route_error": requested_route_error,
         "selected_destination": goal.copy(),
         "landing_site_offset": float(np.linalg.norm(goal[:2] - requested_goal[:2]))
     }
@@ -330,10 +362,10 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
 
 
 if __name__ == "__main__":
-    import plotting
-
+    from drone_sim.visualization import plotting
     plotting.use_backend("Agg")
     final_state, simulation_data = run_simulation()
     plotting.plot_data(simulation_data, show = False)
     plotting.plot_3d_trajectory(simulation_data, show = False)
+    plotting.plot_2d_trajectory(simulation_data, show = False)
     plotting.close_all()

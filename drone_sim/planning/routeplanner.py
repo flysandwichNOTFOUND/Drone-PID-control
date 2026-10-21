@@ -1,6 +1,6 @@
 import numpy as np
-from terrain import FlatTerrain
-from pathfinding import AStarPathfinder
+from drone_sim.world.terrain import FlatTerrain
+from drone_sim.planning.pathfinding import AStarPathfinder
 
 class RoutePlanner:
     def __init__(self, start_position, goal_position, ground_height, minimum_clearance, waypoint_spacing,

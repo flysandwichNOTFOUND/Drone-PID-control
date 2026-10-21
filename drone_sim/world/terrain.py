@@ -1,6 +1,6 @@
 """Shared terrain elevations for route planning, contact, and rendering."""
 import numpy as np
-from validation import positive, vector
+from drone_sim.validation import positive, vector
 
 
 class FlatTerrain:

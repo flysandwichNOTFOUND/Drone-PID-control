@@ -1,6 +1,6 @@
 import numpy as np
-from attitude import euler_rates, wrap_angle
-from validation import gains, positive, vector
+from drone_sim.physics.attitude import euler_rates, wrap_angle
+from drone_sim.validation import gains, positive, vector
 
 class HeightPIDController:
     def __init__(self, kp, ki, kd, hover_speed, max_motor_speed):

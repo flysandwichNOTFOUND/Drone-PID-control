@@ -24,19 +24,18 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from project_paths import output_path
+from drone_sim.configuration.project_paths import output_path
 
-import plotting
+from drone_sim.visualization import plotting
 import numpy as np
 
-from testing import DroneState
-from attitude import wrap_angle
+from drone_sim.physics.dynamics import DroneState
+from drone_sim.physics.attitude import wrap_angle
 
 
 # main.py supplies mission targets and modes; parameters.py supplies gains and shared settings.
-import main as mission
-import parameters
-
+from drone_sim import main as mission
+from drone_sim.configuration import parameters
 DT = parameters.DT
 TARGET_HEIGHT = mission.TARGET_HEIGHT
 TARGET_YAW_DEGREES = mission.TARGET_YAW
@@ -143,7 +142,7 @@ def run_simulation(
 
     history = empty_history()
     saturated_steps = 0
-    from validation import positive
+    from drone_sim.validation import positive
     positive(DT, "Time step")
     positive(duration, "Trial duration")
     number_of_steps = int(duration / DT)

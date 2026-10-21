@@ -132,7 +132,7 @@ TERRAIN_SEED = 17
 
 HILL_CENTER = np.array([5.0, 4.0])
 
-HILL_HEIGHT = 2
+HILL_HEIGHT = 10
 
 HILL_WIDTH = 1.6
 
@@ -175,13 +175,3 @@ HOVER_SPEED = np.sqrt( TOTAL_MASS * GRAVITY / (4 * THRUST_COEFFICIENT) )
 #MISSION TARGET AND MODE SELECTION
 # ============================================================
 
-TARGET_YAW = 0
-TARGET_HEIGHT = 2.0
-TARGET_X = 10
-TARGET_Y = 6
-
-# MODE SELECTION
-ROUTE_PLANNING_MODE = "astar"     # "astar" or "straight"
-TERRAIN_MODE = "landscape"  # "flat", "hill", "slope", "landscape"
-WIND_MODE = "none"  #"none", "constant", "gust"
-LANDING_MODE = "safe_nearby"  # "strict", "safe_nearby", "exact"

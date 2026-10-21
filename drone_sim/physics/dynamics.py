@@ -1,7 +1,7 @@
 import numpy as np
-from attitude import integrate_orientation
-from validation import positive, vector
-from terrain import FlatTerrain
+from drone_sim.physics.attitude import integrate_orientation
+from drone_sim.validation import positive, vector
+from drone_sim.world.terrain import FlatTerrain
 
 class Drone:
     def __init__(self, total_mass, arm_len, max_thrust_per_motor, moi, thrust_coe, torque_coe,

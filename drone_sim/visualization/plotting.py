@@ -4,7 +4,7 @@ All rendering settings live here. Flight limits and ground height are supplied
 by the simulation data, keeping this module independent of main.py.
 """
 import numpy as np
-from project_paths import output_path
+from drone_sim.configuration.project_paths import output_path
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, LightSource
 from matplotlib.patches import Patch
@@ -182,6 +182,11 @@ def plot_3d_trajectory(simulation_data, *, show = True):
     ax = fig.add_subplot(111, projection = "3d", computed_zorder = False)
 
     all_points = np.vstack((positions, waypoints))
+    requested_route = simulation_data.get("requested_waypoints") if simulation_data.get("landing_mode") == "safe_nearby" else None
+
+    if requested_route is not None:
+        requested_route = np.asarray(requested_route, dtype = float)
+        all_points = np.vstack((all_points, requested_route))
     map_points = np.vstack((all_points[:, :2], getattr(terrain, "center", all_points[0, :2])))
 
     if hasattr(terrain, "plot_bounds"):
@@ -205,9 +210,17 @@ def plot_3d_trajectory(simulation_data, *, show = True):
     ax.plot_surface(terrain_x, terrain_y, terrain_z, facecolors = colors, linewidth = 0, antialiased = False, shade = False, rcount = 220, ccount = 220, zorder = 1)
 
     ax.plot(positions[:, 0], positions[:, 1], positions[:, 2], color = "tab:blue", label = "Actual trajectory")
-    ax.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2], color = "tab:orange", linestyle = "--", marker = "o", label = "Planned route")
+    adapted = simulation_data.get("landing_mode") == "safe_nearby"
+    ax.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2], color = "tab:orange", linestyle = "--", marker = "o", label = "Adapted planned route" if adapted else "Planned route")
+
+    if requested_route is not None:
+        ax.plot(requested_route[:, 0], requested_route[:, 1], requested_route[:, 2], color = "tab:purple", linestyle = ":", linewidth = 2, label = "Requested route (comparison only)")
+
+    if adapted and "requested_destination" in simulation_data:
+        x, y = simulation_data["requested_destination"][:2]
+        ax.scatter(x, y, float(terrain.height(x, y)), color = "tab:purple", marker = "D", s = 60, zorder = 5, label = "Requested landing site")
     ax.scatter(positions[0, 0], positions[0, 1], positions[0, 2], color = "green", s = 80, zorder = 4, label = "First recorded position")
-    ax.scatter(waypoints[-1, 0], waypoints[-1, 1], waypoints[-1, 2], color = "red", marker = "*", s = 150, zorder = 4, label = "Endpoint")
+    ax.scatter(waypoints[-1, 0], waypoints[-1, 1], waypoints[-1, 2], color = "red", marker = "*", s = 150, zorder = 4, label = "Selected landing site" if adapted else "Endpoint")
     ax.scatter(positions[-1, 0], positions[-1, 1], positions[-1, 2], color = "purple", marker = "x", s = 80, zorder = 5, label = "Final position")
 
     ax.set_xlabel("X position (m)")
@@ -232,6 +245,43 @@ def plot_3d_trajectory(simulation_data, *, show = True):
         plt.show()
 
     return fig
+
+def plot_2d_trajectory(simulation_data, *, show = True):
+    """Compare requested and adapted routes in the XY plane."""
+
+    positions = np.asarray(simulation_data["position"], dtype = float)
+    waypoints = np.asarray(simulation_data["waypoints"], dtype = float)
+    adapted = simulation_data.get("landing_mode") == "safe_nearby"
+    figure, ax = plt.subplots(figsize = (9, 8))
+    figure.suptitle(landing_label(simulation_data), fontsize = 13)
+    ax.plot(positions[:, 0], positions[:, 1], color = "tab:blue", label = "Actual trajectory")
+    ax.plot(waypoints[:, 0], waypoints[:, 1], color = "tab:orange", linestyle = "--", label = "Adapted planned route" if adapted else "Planned route")
+    requested_route = simulation_data.get("requested_waypoints") if adapted else None
+
+    if requested_route is not None:
+        requested_route = np.asarray(requested_route, dtype = float)
+        ax.plot(requested_route[:, 0], requested_route[:, 1], color = "tab:purple", linestyle = ":", linewidth = 2, label = "Requested route (comparison only)")
+
+    if adapted and "requested_destination" in simulation_data:
+        x, y = simulation_data["requested_destination"][:2]
+        ax.scatter(x, y, color = "tab:purple", marker = "D", s = 60, label = "Requested landing site")
+
+    if adapted and simulation_data.get("requested_route_error"):
+        ax.text(0.02, 0.02, "No route found to requested site", transform = ax.transAxes)
+
+    ax.scatter(waypoints[-1, 0], waypoints[-1, 1], color = "red", marker = "*", s = 150, label = "Selected landing site" if adapted else "Endpoint")
+    ax.scatter(positions[-1, 0], positions[-1, 1], color = "black", marker = "x", s = 60, label = "Final position")
+    ax.set(xlabel = "X position (m)", ylabel = "Y position (m)", title = "Drone Trajectory: Top View")
+    ax.set_aspect("equal", adjustable = "datalim")
+    ax.grid(True)
+    ax.legend(fontsize = 8)
+    figure.tight_layout(rect = (0, 0, 1, 0.92))
+    figure.savefig(output_path("drone_2d_trajectory.png"), dpi = 300)
+
+    if show:
+        plt.show()
+
+    return figure
 
 def plot_validation(history, *, target_height, hover_speed, max_motor_speed, show = True):
 

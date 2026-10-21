@@ -10,16 +10,16 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from unittest.mock import patch
 import numpy as np
-import main
-import parameters
+from drone_sim import main
+from drone_sim.configuration import parameters
 from tools import auto_tune_pid as tuner
-from attitude import integrate_orientation
-from controllerV1 import OrientationPIDController, PositionPIDController
-from testing import DroneState
-from navigation import Navigation
-from terrain import FlatTerrain, HillTerrain, SlopedTerrain, LandscapeTerrain
-from landing import LandingController
-from routeplanner import RoutePlanner
+from drone_sim.physics.attitude import integrate_orientation
+from drone_sim.control.controllerV1 import OrientationPIDController, PositionPIDController
+from drone_sim.physics.dynamics import DroneState
+from drone_sim.control.navigation import Navigation
+from drone_sim.world.terrain import FlatTerrain, HillTerrain, SlopedTerrain, LandscapeTerrain
+from drone_sim.control.landing import LandingController
+from drone_sim.planning.routeplanner import RoutePlanner
 
 
 class ControllerTests(unittest.TestCase):
@@ -253,7 +253,7 @@ class TerrainLandingTests(unittest.TestCase):
 
     def test_astar_detours_and_preserves_segment_clearance(self):
 
-        from pathfinding import AStarPathfinder
+        from drone_sim.planning.pathfinding import AStarPathfinder
 
         terrain = HillTerrain(center = [3, 0], height = 5, width = 0.7)
         start = [0, 0, float(terrain.height(0, 0))]
@@ -272,7 +272,7 @@ class TerrainLandingTests(unittest.TestCase):
 
     def test_astar_failure_is_not_replaced_by_straight_route(self):
 
-        from pathfinding import NoPathError
+        from drone_sim.planning.pathfinding import NoPathError
 
         terrain = HillTerrain(center = [0.5, 0], height = 5, width = 0.05)
         planner = RoutePlanner([0, 0, float(terrain.height(0, 0))], [1, 0, 2],
@@ -323,7 +323,7 @@ class TerrainLandingTests(unittest.TestCase):
 class PathFollowerTests(unittest.TestCase):
     def test_continuous_reference_obeys_limits_and_crosses_waypoints(self):
 
-        from navigation import PathFollower
+        from drone_sim.control.navigation import PathFollower
 
         follower = PathFollower([[0, 0, 2], [1, 0, 2], [2, 0, 2], [4, 0, 2]],
                                 [0, 0, 0], 0.02, 0.05)
@@ -356,7 +356,7 @@ class PathFollowerTests(unittest.TestCase):
 
     def test_stalled_drone_keeps_reference_nearby(self):
 
-        from navigation import PathFollower
+        from drone_sim.control.navigation import PathFollower
 
         follower = PathFollower([[10, 0, 0]], [0, 0, 0], 0.02, 0.05)
         state = DroneState()
@@ -372,7 +372,7 @@ class PathFollowerTests(unittest.TestCase):
 
     def test_s_curve_acceleration_and_jerk_limits(self):
 
-        from navigation import PathFollower
+        from drone_sim.control.navigation import PathFollower
 
         for goal, dt, stalled in [([0.03, 0, 0], 0.01, False),
                                   ([10, 0, 0], 0.02, False),
@@ -404,7 +404,7 @@ class PathFollowerTests(unittest.TestCase):
 
     def test_duplicate_stationary_waypoints(self):
 
-        from navigation import PathFollower
+        from drone_sim.control.navigation import PathFollower
 
         follower = PathFollower([[0, 0, 0], [0, 0, 0]], [0, 0, 0], 0.02, 0.05)
         follower.update(DroneState(), 0.01)

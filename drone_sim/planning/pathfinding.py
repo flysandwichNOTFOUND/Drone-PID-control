@@ -20,8 +20,8 @@ from itertools import count
 
 import numpy as np
 
-from terrain import FlatTerrain, SlopedTerrain
-from validation import positive, vector
+from drone_sim.world.terrain import FlatTerrain, SlopedTerrain
+from drone_sim.validation import positive, vector
 
 
 class NoPathError(RuntimeError):

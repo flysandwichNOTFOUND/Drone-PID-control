@@ -1,6 +1,6 @@
 import numpy as np
 import math
-from validation import positive, vector
+from drone_sim.validation import positive, vector
 
 
 class Navigation:
