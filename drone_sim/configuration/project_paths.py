@@ -1,4 +1,3 @@
-"""Project locations shared by plotting and tuning tools."""
 from pathlib import Path
 
 

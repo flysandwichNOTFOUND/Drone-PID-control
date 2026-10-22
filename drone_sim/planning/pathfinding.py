@@ -1,20 +1,3 @@
-"""Terrain-aware A* search producing verified cruise waypoints.
-
-This first design uses a 2D grid with one safe flight altitude per grid node.
-It can compare routes around hills with routes over them, but does not search
-every possible altitude as a full 3D planner would.
-
-Planning flow:
-    validate inputs -> build elevation grid -> search safe edges with A*
-    -> reconstruct route -> connect exact endpoints -> verify every segment
-
-RoutePlanner will add takeoff and landing to the returned cruise waypoints.
-Navigation and the PID controllers will continue to execute that route.
-
-Terrain must remain static while using a grid and provide height(x, y) plus
-a conservative maximum_height_along(start_xy, end_xy). Search bounds restrict
-the area explored; an altitude ceiling can exclude high terrain nodes.
-"""
 import heapq
 from itertools import count
 

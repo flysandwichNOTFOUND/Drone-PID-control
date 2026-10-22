@@ -1,8 +1,3 @@
-"""Simulation and PID-validation graphs, including the terrain preview.
-
-All rendering settings live here. Flight limits and ground height are supplied
-by the simulation data, keeping this module independent of main.py.
-"""
 import numpy as np
 from drone_sim.configuration.project_paths import output_path
 import matplotlib.pyplot as plt
@@ -29,6 +24,8 @@ def landing_label(simulation_data):
 
     mode = simulation_data.get("landing_mode", "unspecified")
     label = f"Landing mode: {mode if mode is not None else 'disabled'}"
+    if "physics_backend" in simulation_data:
+        label = f"Physics backend: {simulation_data['physics_backend']}\n" + label
 
     if mode == "safe_nearby" and "selected_destination" in simulation_data:
         x, y = simulation_data["selected_destination"][:2]
@@ -273,6 +270,14 @@ def plot_2d_trajectory(simulation_data, *, show = True):
     ax.scatter(positions[-1, 0], positions[-1, 1], color = "black", marker = "x", s = 60, label = "Final position")
     ax.set(xlabel = "X position (m)", ylabel = "Y position (m)", title = "Drone Trajectory: Top View")
     ax.set_aspect("equal", adjustable = "datalim")
+    terrain = simulation_data["terrain"]
+
+    if hasattr(terrain, "plot_bounds"):
+        xmin, xmax, ymin, ymax = terrain.plot_bounds
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+        ax.set_aspect("equal", adjustable = "box")
+
     ax.grid(True)
     ax.legend(fontsize = 8)
     figure.tight_layout(rect = (0, 0, 1, 0.92))

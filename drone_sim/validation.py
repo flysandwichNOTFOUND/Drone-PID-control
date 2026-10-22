@@ -1,4 +1,3 @@
-"""Input checks shared by the simulator and controllers."""
 import numpy as np
 
 

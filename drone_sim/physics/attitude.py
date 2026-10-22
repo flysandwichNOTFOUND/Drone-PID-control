@@ -1,4 +1,3 @@
-"""Body-rate kinematics for the ZYX roll/pitch/yaw convention."""
 import numpy as np
 
 

@@ -1,8 +1,3 @@
-"""
-Shared simulation parameters.
-
-mission targets, and mode selections are configured in main.py.
-"""
 import numpy as np
 
 # ============================================================
@@ -10,16 +5,16 @@ import numpy as np
 # ============================================================
 
 # PID GAINS
-KP = 211.092059550
-KI = 0.223363309
-KD = 93.863981577
+KP = 235.322440352
+KI = 0.159827328
+KD = 106.244649639
 
 # Orientation and position gains: [Kp, Ki, Kd]
-ROLL_GAINS = np.array([50.679433130, 0.026414318, 14.574450033])
-PITCH_GAINS = np.array([50.571938943, 0.060850500, 14.352389900])
-YAW_GAINS = np.array([37.650316822, 0.048992121, 34.053486350])
-X_POSITION_GAINS = np.array([0.301072977, 0.000751421, 0.297699224])
-Y_POSITION_GAINS = np.array([0.303979658, 0.004076894, 0.309451213])
+ROLL_GAINS = np.array([48.937711680, 0.031942350, 16.399264339])
+PITCH_GAINS = np.array([67.920116448, 0.080796429, 9.644687487])
+YAW_GAINS = np.array([37.143020405, 0.043782265, 31.138992396])
+X_POSITION_GAINS = np.array([0.437555050, 0.000649502, 0.446548836])
+Y_POSITION_GAINS = np.array([0.455969487, 0.004478701, 0.432557432])
 
 # ============================================================
 # DRONE PARAMETERS
@@ -129,6 +124,15 @@ LANDING_MAX_JERK = 0.5            # m/s³
 # ============================================================
 
 TERRAIN_SEED = 17
+TERRAIN_BOUNDS = (-100.0, 100.0, -100.0, 100.0) 
+
+#noise configuration
+LANDSCAPE_HEIGHT = 18.0          #scales noise variation, not an absolute maximum
+LANDSCAPE_FEATURE_SIZE = 60.0    #width of the largest noise cells
+LANDSCAPE_OCTAVES = 4            # noise layers
+LANDSCAPE_PERSISTENCE = 0.3      # amplitude multiplier 
+LANDSCAPE_LACUNARITY = 2.0       # frequency multiplier
+LANDSCAPE_RESOLUTION = 1.0       #cached height-map spacing
 
 HILL_CENTER = np.array([5.0, 4.0])
 
@@ -160,7 +164,15 @@ GUST_PERIOD = 6.0
 
 DT = 0.005                          # seconds per step
 
-SIMULATION_TIME = 40.0
+SIMULATION_TIME = 40.0           # fixed-duration PID trials; missions run until arrival by default
+ARRIVAL_WAIT_TIME = 1.5          # simulated seconds to wait at the destination before stopping
+
+# Gym backend initialization (collision geometry is an approximation).
+GYM_BODY_RADIUS = 0.08            # metres; central body, excluding rotor arms
+GYM_BODY_HEIGHT = 0.04            # metres
+GYM_PHYSICS_SUBSTEPS = 1          # DT=0.005 -> control/physics both 200 Hz
+GYM_TERRAIN_BOUNDS = TERRAIN_BOUNDS
+GYM_TERRAIN_RESOLUTION = 0.5      # mesh spacing in metres
 
 
 # ============================================================

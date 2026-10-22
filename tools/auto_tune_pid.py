@@ -1,21 +1,3 @@
-"""Automatically tune the PID controllers used by the drone prototype.
-
-Run from the project root:
-    python -m tools.auto_tune_pid
-
-The tuner works in stages:
-    1. Height
-    2. Roll
-    3. Pitch
-    4. Yaw
-    5. X position
-    6. Y position
-    7. Combined X/Y validation
-
-It does not modify main.py or controllerV1.py. Results are written to
-outputs/optimized_pid_gains.json and outputs/auto_tune_results.png.
-"""
-
 import json
 from pathlib import Path
 import sys
@@ -26,7 +8,6 @@ if __package__ in (None, ""):
 
 from drone_sim.configuration.project_paths import output_path
 
-from drone_sim.visualization import plotting
 import numpy as np
 
 from drone_sim.physics.dynamics import DroneState
@@ -37,7 +18,7 @@ from drone_sim.physics.attitude import wrap_angle
 from drone_sim import main as mission
 from drone_sim.configuration import parameters
 DT = parameters.DT
-TARGET_HEIGHT = mission.TARGET_HEIGHT
+TARGET_HEIGHT = mission.MINIMUM_FLIGHT_ALTITUDE
 TARGET_YAW_DEGREES = mission.TARGET_YAW
 POSITION_TEST_DISTANCE = 1.0
 MAX_TILT_DEGREES = parameters.MAX_TILT_DEGREES
@@ -74,9 +55,10 @@ POSITION_BOUNDS = np.array(
 )
 
 
-def create_drone():
+def create_drone(physics_backend = "simulation", terrain = None):
 
-    return mission.create_drone()
+    from drone_sim.world.terrain import FlatTerrain
+    return mission.create_drone(FlatTerrain() if terrain is None else terrain, physics_backend = physics_backend)
 
 
 def create_controllers(gains):
@@ -100,116 +82,56 @@ def empty_history():
     }
 
 
-def run_simulation(
-    gains,
-    duration,
-    fixed_orientation = None,
-    target_position = None,
-):
-    """Run a trial with the mission settings, environment, and shared control step."""
+def run_simulation(gains, duration, fixed_orientation = None, target_position = None,
+                   physics_backend = "simulation", start_hover = True, wind = (0.0, 0.0, 0.0), yaw = 0.0):
+    """Fixed-duration excitation trial with explicit backend and owned cleanup."""
+
+    from drone_sim.validation import positive, vector
+    from drone_sim.world.environment import BasicEnvironment
 
     if fixed_orientation is not None and target_position is not None:
-        raise ValueError(
-            "Use either fixed_orientation or target_position, not both."
-        )
-
-    drone = create_drone()
-    state = DroneState()
-    state.position[2] = drone.get_ground_height(*state.position[:2])
-    environment = mission.create_environment()
-
-    (
-        height_controller,
-        orientation_controller,
-        position_controller,
-    ) = create_controllers(gains)
-
-    if fixed_orientation is None:
-        fixed_orientation = np.zeros(3, dtype = float)
-    else:
-        fixed_orientation = np.asarray(
-            fixed_orientation,
-            dtype = float,
-        )
-
-    if target_position is None:
-        target_position_array = np.zeros(2, dtype = float)
-    else:
-        target_position_array = np.asarray(
-            target_position,
-            dtype = float,
-        )
-
-    history = empty_history()
-    saturated_steps = 0
-    from drone_sim.validation import positive
-    positive(DT, "Time step")
-    positive(duration, "Trial duration")
-    number_of_steps = int(duration / DT)
-    if number_of_steps < 1:
+        raise ValueError("Use fixed_orientation or target_position, not both.")
+    dt = positive(DT, "Time step")
+    duration = positive(duration, "Trial duration")
+    steps = int(duration / dt)
+    if steps < 1:
         raise ValueError("Trial duration must include at least one time step.")
-
-    for step in range(number_of_steps):
-        try:
-            target_orientation = mission.control_step(
-                drone, state, (height_controller, orientation_controller, position_controller),
-                environment, TARGET_HEIGHT, target_position_array,
-                np.radians(TARGET_YAW_DEGREES), DT, step * DT,
-                fixed_orientation = fixed_orientation if target_position is None else None)
-        except (FloatingPointError, ValueError):
-            return None
-
-        if np.any(
-            (state.motor_speeds <= 1.0e-9)
-            | (
-                state.motor_speeds
- >= MAX_MOTOR_SPEED - 1.0e-9
-            )
-        ):
-            saturated_steps += 1
-
-        all_state_values = np.concatenate(
-            [
-                state.position,
-                state.velocity,
-                state.orientation,
-                state.angular_velocity,
-                state.motor_speeds,
-            ]
-        )
-
-        if (
-            not np.all(np.isfinite(all_state_values))
-            or np.linalg.norm(state.position) > 100.0
-            or np.linalg.norm(state.orientation) > 4.0 * np.pi
-        ):
-            return None
-
-        history["time"].append((step + 1) * DT)
-        history["position"].append(state.position.copy())
-        history["velocity"].append(state.velocity.copy())
-        history["orientation"].append(
-            state.orientation.copy()
-        )
-        history["angular_velocity"].append(
-            state.angular_velocity.copy()
-        )
-        history["motor_speeds"].append(
-            state.motor_speeds.copy()
-        )
-        history["target_height"].append(TARGET_HEIGHT)
-        history["target_orientation"].append(
-            target_orientation.copy()
-        )
-        history["target_position"].append(
-            target_position_array.copy()
-        )
-
-    history["saturation_fraction"] = (
-        saturated_steps / number_of_steps
-    )
-
-    return history
+    fixed = np.zeros(3) if fixed_orientation is None else vector(fixed_orientation, 3, "Target orientation")
+    target = np.zeros(2) if target_position is None else vector(target_position, 2, "Target position")
+    wind = vector(wind, 3, "Trial wind")
+    environment = BasicEnvironment("constant" if np.any(wind) else "none", wind, parameters.WIND_FORCE_COEFFICIENT)
+    drone = create_drone(physics_backend)
+    try:
+        state = DroneState()
+        state.position[2] = TARGET_HEIGHT if start_hover else drone.get_ground_height(0, 0)
+        if physics_backend == "gym_pybullet" and not start_hover:
+            state.position[:] = drone.initial_position
+        if start_hover:
+            state.motor_speeds.fill(HOVER_SPEED)
+        if physics_backend == "gym_pybullet":
+            drone.reset(state)
+        controllers = create_controllers(gains)
+        history = empty_history()
+        for step in range(steps):
+            try:
+                desired = mission.control_step(
+                    drone, state, controllers, environment, TARGET_HEIGHT, target,
+                    yaw, dt, step * dt, fixed_orientation = fixed if target_position is None else None)
+            except (FloatingPointError, ValueError):
+                return None
+            for key, value in {
+                "time": (step + 1) * dt, "position": state.position.copy(),
+                "velocity": state.velocity.copy(), "orientation": state.orientation.copy(),
+                "angular_velocity": state.angular_velocity.copy(), "motor_speeds": state.motor_speeds.copy(),
+                "target_height": TARGET_HEIGHT, "target_orientation": desired.copy(), "target_position": target.copy()
+            }.items():
+                history[key].append(value)
+        from tools.pid_scenarios import control_metrics
+        history["saturation_fraction"], history["motor_slew_rms_per_s"] = control_metrics(history["motor_speeds"], history["time"])
+        return history
+    finally:
+        if hasattr(drone, "close"):
+            drone.close()
 
 
 def history_arrays(history):
@@ -391,13 +313,10 @@ def search_gains(
     low = bounds[:, 0].copy()
     high = bounds[:, 1].copy()
 
-    trials_per_round = max(
-        1,
-        TRIALS_PER_CONTROLLER // 3,
-    )
+    trials_per_round, extra_trials = divmod(TRIALS_PER_CONTROLLER, 3)
 
     for round_index in range(3):
-        for _ in range(trials_per_round):
+        for _ in range(trials_per_round + (round_index < extra_trials)):
             candidate = rng.uniform(low, high)
 
             # Regularly test candidates without integral gain.
@@ -439,297 +358,262 @@ def initial_gain_dictionary():
     return mission.current_gains()
 
 
-def tune_controllers():
+def trial_penalty(history, errors, speeds, tolerance):
 
-    rng = np.random.default_rng(RANDOM_SEED)
-    gains = initial_gain_dictionary()
-    scores = {}
-
-    def evaluate_height(candidate):
-
-        trial_gains = {
-            name: value.copy()
-            for name, value in gains.items()
-        }
-        trial_gains["height"] = candidate
-
-        history = run_simulation(
-            gains = trial_gains,
-            duration = 6.0,
-            fixed_orientation = np.zeros(3, dtype = float),
-        )
-
-        return score_height(history)
-
-    gains["height"], scores["height"] = search_gains(
-        "Height",
-        gains["height"],
-        HEIGHT_BOUNDS,
-        evaluate_height,
-        rng,
-    )
-
-    orientation_settings = [
-        (
-            "roll",
-            0,
-            np.radians([8.0, 0.0, 0.0]),
-            ROLL_BOUNDS,
-        ),
-        (
-            "pitch",
-            1,
-            np.radians([0.0, 8.0, 0.0]),
-            PITCH_BOUNDS,
-        ),
-        (
-            "yaw",
-            2,
-            np.radians([0.0, 0.0, 12.0]),
-            YAW_BOUNDS,
-        ),
-    ]
-
-    for name, axis, target_orientation, bounds in orientation_settings:
-        def evaluate_orientation(
-            candidate,
-            controller_name = name,
-            controller_axis = axis,
-            controller_target = target_orientation,
-        ):
-
-            trial_gains = {
-                key: value.copy()
-                for key, value in gains.items()
-            }
-            trial_gains[controller_name] = candidate
-
-            history = run_simulation(
-                gains = trial_gains,
-                duration = 5.0,
-                fixed_orientation = controller_target,
-            )
-
-            return score_orientation(
-                history,
-                controller_target,
-                controller_axis,
-            )
-
-        gains[name], scores[name] = search_gains(
-            name.capitalize(),
-            gains[name],
-            bounds,
-            evaluate_orientation,
-            rng,
-        )
-
-    position_settings = [
-        (
-            "x",
-            0,
-            np.array([POSITION_TEST_DISTANCE, 0.0]),
-        ),
-        (
-            "y",
-            1,
-            np.array([0.0, POSITION_TEST_DISTANCE]),
-        ),
-    ]
-
-    for name, axis, target_position in position_settings:
-        def evaluate_position(
-            candidate,
-            controller_name = name,
-            controller_axis = axis,
-            controller_target = target_position,
-        ):
-
-            trial_gains = {
-                key: value.copy()
-                for key, value in gains.items()
-            }
-            trial_gains[controller_name] = candidate
-
-            history = run_simulation(
-                gains = trial_gains,
-                duration = 12.0,
-                target_position = controller_target,
-            )
-
-            return score_position(
-                history,
-                controller_target,
-                controller_axis,
-            )
-
-        gains[name], scores[name] = search_gains(
-            f"{name.upper()} position",
-            gains[name],
-            POSITION_BOUNDS,
-            evaluate_position,
-            rng,
-        )
-
-    gains["scores"] = scores
-    return gains
-
-
-def combined_validation_score(history, target_position):
-
+    from tools.pid_scenarios import settling_time
     if history is None:
         return float("inf")
-
-    return (
-        score_position(history, target_position, axis = 0)
- + score_position(history, target_position, axis = 1)
-    )
+    time = np.asarray(history["time"])
+    settled = settling_time(time, (np.abs(errors) <= tolerance) & (np.abs(speeds) <= 0.15))
+    return 2 * (settled if settled is not None else 2 * time[-1]) + 0.05 * history["motor_slew_rms_per_s"]**2
 
 
-def print_recommendations(gains):
+def tune_controllers(physics_backend = "simulation"):
+    """Tune attitude first, then altitude and position using both command signs."""
 
-    current = initial_gain_dictionary()
+    gains = initial_gain_dictionary()
+    rng = np.random.default_rng(RANDOM_SEED)
+    scores = {}
+    settings = [("roll", 0, ROLL_BOUNDS), ("pitch", 1, PITCH_BOUNDS),
+                ("yaw", 2, YAW_BOUNDS), ("height", 2, HEIGHT_BOUNDS),
+                ("x", 0, POSITION_BOUNDS), ("y", 1, POSITION_BOUNDS)]
 
-    print("\nPID recommendations [Kp, Ki, Kd]")
-    print("----------------------------------")
+    for name, axis, bounds in settings:
+        def evaluate(candidate):
+            trial = {key: np.asarray(value).copy() for key, value in gains.items()}
+            trial[name] = candidate
+            results = []
+            for sign in (1, -1):
+                wind = (0.0, 0.0, 0.0) if sign == 1 else (0.3, -0.2, 0.0)
+                if name in ("roll", "pitch", "yaw"):
+                    target = np.zeros(3)
+                    target[axis] = np.radians(sign * (12 if name == "yaw" else 8))
+                    history = run_simulation(trial, 5.0, fixed_orientation = target, physics_backend = physics_backend, wind = wind)
+                    score = score_orientation(history, target, axis)
+                    if history is not None:
+                        errors = wrap_angle(np.asarray(history["orientation"])[:, axis] - target[axis])
+                        score += trial_penalty(history, errors, np.asarray(history["angular_velocity"])[:, axis], np.radians(1))
+                elif name == "height":
+                    # Ground launch and hover recovery exercise different altitude errors.
+                    history = run_simulation(trial, 6.0, physics_backend = physics_backend, start_hover = sign == -1, wind = (0, 0, sign * 0.3))
+                    score = score_height(history)
+                    if history is not None:
+                        score += trial_penalty(history, np.asarray(history["position"])[:, 2] - TARGET_HEIGHT, np.asarray(history["velocity"])[:, 2], 0.1)
+                else:
+                    target = np.zeros(2)
+                    target[axis] = sign * POSITION_TEST_DISTANCE
+                    history = run_simulation(trial, 12.0, target_position = target, physics_backend = physics_backend, wind = wind, yaw = np.radians(sign * 30))
+                    score = score_position(history, target, axis)
+                    if history is not None:
+                        score += trial_penalty(history, np.asarray(history["position"])[:, axis] - target[axis], np.asarray(history["velocity"])[:, axis], 0.1)
+                results.append(score)
+            return float(np.mean(results) + 0.25 * np.max(results))
 
-    for name in current:
-        recommended = np.asarray(gains[name], dtype = float)
-        adjustment = recommended - current[name]
+        gains[name], scores[name] = search_gains(name, gains[name], bounds, evaluate, rng)
 
-        print(f"\n{name.capitalize()}")
-        print("  Current:     ", np.round(current[name], 6))
-        print("  Adjustment:  ", np.round(adjustment, 6))
-        print("  Recommended: ", np.round(recommended, 6))
-
-
-def validate_route(gains):
-    """Evaluate the actual configured mission, including waypoint transitions."""
-
-    try:
-        state, data = mission.run_simulation(gains = gains, verbose = False)
-    except (FloatingPointError, ValueError):
-        return {"score": float("inf"), "mission_complete": False}
-    positions = np.asarray(data["position"])
-    targets = np.asarray(data["target_position_history"])
-    final_error = np.linalg.norm(state.position - data["waypoints"][-1])
-    score = (15 * np.mean(np.sum((targets - positions)**2, axis = 1))
- + 120 * final_error**2 + 35 * np.dot(state.velocity, state.velocity)
- + (0 if data["mission_complete"] else 1000))
-    return {"score": float(score), "mission_complete": bool(data["mission_complete"]),
-            "final_error": float(final_error), "landed": bool(data["landed"])}
-
-
-def validate_recommendations(candidate):
-    """Keep baseline gains unless both validation cases improve or tie."""
-
-    baseline = initial_gain_dictionary()
-    target = np.array([POSITION_TEST_DISTANCE, POSITION_TEST_DISTANCE])
-    baseline_history = run_simulation(baseline, 15.0, target_position = target)
-    candidate_history = run_simulation(candidate, 15.0, target_position = target)
-    baseline_score = combined_validation_score(baseline_history, target)
-    candidate_score = combined_validation_score(candidate_history, target)
-    baseline_route = validate_route(baseline)
-    candidate_route = validate_route(candidate)
-    accepted = bool(np.isfinite(candidate_score) and candidate_score <= baseline_score
-                    and np.isfinite(candidate_route["score"])
-                    and candidate_route["score"] <= baseline_route["score"]
-                    and candidate_route["mission_complete"])
-    selected = candidate if accepted else {**baseline, "scores": candidate["scores"]}
-    history = candidate_history if accepted else baseline_history
-    score = candidate_score if accepted else baseline_score
-    if history is None or not np.isfinite(score):
-        raise RuntimeError("Baseline and candidate validation failed; no recommendations saved.")
-    validation = {"candidate_accepted": accepted,
-                  "baseline_combined_score": baseline_score,
-                  "candidate_combined_score": candidate_score,
-                  "baseline_route": baseline_route, "candidate_route": candidate_route}
-    return selected, history, score, validation
-
-
-def save_json(gains, validation_score, validation):
-
-    current = initial_gain_dictionary()
-
-    output = {
-        "gain_order": ["Kp", "Ki", "Kd"],
-        "current_gains": {
-            name: values.tolist()
-            for name, values in current.items()
-        },
-        "recommended_adjustments": {
-            name: (
-                np.asarray(gains[name]) - current[name]
-            ).tolist()
-            for name in current
-        },
-        "recommended_new_gains": {
-            name: np.asarray(gains[name]).tolist()
-            for name in current
-        },
-        "stage_scores": {
-            name: float(score)
-            for name, score in gains["scores"].items()
-        },
-        "combined_position_validation_score": float(
-            validation_score
-        ),
-        "validation": validation,
-        "settings": {
-            "dt": DT,
-            "target_height": TARGET_HEIGHT,
-            "max_tilt_degrees": MAX_TILT_DEGREES,
-            "trials_per_controller": TRIALS_PER_CONTROLLER,
-            "random_seed": RANDOM_SEED,
-        },
-    }
-
-    output_path("optimized_pid_gains.json").write_text(
-        # Failed trials are represented as null instead of nonstandard Infinity.
-        json.dumps(json_safe(output), indent = 2, allow_nan = False),
-        encoding = "utf-8",
-    )
+    return {**gains, "scores": scores}
 
 
 def json_safe(value):
 
     if isinstance(value, dict):
         return {key: json_safe(item) for key, item in value.items()}
-    if isinstance(value, list):
+    if isinstance(value, (tuple, list)):
         return [json_safe(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return json_safe(value.tolist())
+    if isinstance(value, np.generic):
+        return json_safe(value.item())
     if isinstance(value, float) and not np.isfinite(value):
         return None
     return value
 
 
+def metric_summary(suite):
+
+    metrics = ("tracking_rmse_m", "overshoot_m", "settling_time_s", "saturation_fraction",
+               "motor_slew_rms_per_s", "touchdown_speed_m_s", "final_error_m")
+    summary = {"score": suite["score"], "success_rate": suite["success_rate"]}
+    for metric in metrics:
+        values = [case[metric] for case in suite["cases"] if case.get(metric) is not None]
+        summary[metric] = float(np.mean(values)) if values else None
+    summary["unsettled_or_failed_cases"] = sum(case.get("settling_time_s") is None for case in suite["cases"])
+    return summary
+
+
+def refine_joint(gains, training, baseline, evaluate, trials, rng):
+    """Refine all 18 gains against training missions; never inspect holdouts."""
+
+    names = ("roll", "pitch", "yaw", "height", "x", "y")
+    configured = (ROLL_BOUNDS, PITCH_BOUNDS, YAW_BOUNDS, HEIGHT_BOUNDS, POSITION_BOUNDS, POSITION_BOUNDS)
+    reference = np.concatenate([baseline[name] for name in names])
+    # Allow local exploration above earlier stage bounds that baseline exceeded.
+    lower = np.concatenate([np.minimum(bounds[:, 0], baseline[name] * 0.5) for name, bounds in zip(names, configured)])
+    upper = np.concatenate([np.maximum(bounds[:, 1], baseline[name] * 1.5) for name, bounds in zip(names, configured)])
+    best = np.concatenate([gains[name] for name in names])
+    scale = np.maximum(np.abs(reference), (upper - lower) * 0.1)
+    cache = {tuple(best): training}
+    trace = []
+
+    for index in range(trials):
+        candidate = best.copy()
+        if index < 4:
+            # Coupled horizontal P/D moves exercise mission tracking directly.
+            proportional, derivative = ((1.15, 1.05), (1.05, 1.15), (0.9, 1.1), (1.1, 0.9))[index]
+            for controller in (4, 5):
+                candidate[controller * 3] *= proportional
+                candidate[controller * 3 + 2] *= derivative
+        else:
+            # Simultaneous perturbations explore interactions across controllers.
+            radius = 0.15 * (1 - 0.65 * (index - 4) / max(1, trials - 4))
+            candidate += rng.normal(size = len(best)) * scale * radius
+        candidate = np.clip(candidate, lower, upper)
+        proposal = {name: candidate[3 * i:3 * i + 3].copy() for i, name in enumerate(names)}
+        cached = tuple(candidate) in cache
+        result = cache.get(tuple(candidate))
+        if result is None:
+            result = evaluate(proposal)
+            cache[tuple(candidate)] = result
+        improved = result["score"] < training["score"] and result["success_rate"] >= training["success_rate"]
+        previous_score = training["score"]
+        if improved:
+            best, training = candidate.copy(), result
+        trace.append({"trial": index + 1, "gains": proposal, "training": result,
+                      "accepted": bool(improved), "cached": cached, "previous_best_score": previous_score})
+        print(f"Joint mission refinement {index + 1}/{trials}: candidate={result['score']:.6f}, best={training['score']:.6f}, accepted={improved}", flush = True)
+
+    refined = {name: best[3 * i:3 * i + 3].copy() for i, name in enumerate(names)}
+    bounds = {name: np.column_stack((lower[3 * i:3 * i + 3], upper[3 * i:3 * i + 3])) for i, name in enumerate(names)}
+    return refined, training, {"trials": trace, "bounds": bounds, "controller_order": names}
+
+
+def run_workflow(physics_backend = "simulation", validation_backends = ("simulation", "gym_pybullet"), seeds = None, joint_trials = 12, reuse_staged = None):
+    """Search training cases, freeze one candidate, then evaluate unseen cases."""
+
+    from dataclasses import asdict
+    from tools.pid_scenarios import TRAINING_SCENARIOS, VALIDATION_SCENARIOS, evaluate_suite, validate_candidate
+
+    if physics_backend not in ("simulation", "gym_pybullet"):
+        raise ValueError("Tuning requires one explicit backend.")
+    if not validation_backends or any(name not in ("simulation", "gym_pybullet") for name in validation_backends):
+        raise ValueError("Validation backends must be simulation and/or gym_pybullet.")
+    if isinstance(joint_trials, bool) or not isinstance(joint_trials, int) or joint_trials < 0:
+        raise ValueError("Joint trials must be a nonnegative integer.")
+    # Fail early on missing optional dependencies, before an expensive search.
+    for backend in set(validation_backends) | {physics_backend}:
+        drone = create_drone(backend)
+        if hasattr(drone, "close"):
+            drone.close()
+
+    baseline = initial_gain_dictionary()
+    baseline_training = evaluate_suite(baseline, TRAINING_SCENARIOS, (physics_backend,))
+    best, best_training = baseline, baseline_training
+    searches = []
+    global RANDOM_SEED
+    original_seed = RANDOM_SEED
+    seeds = [RANDOM_SEED] if seeds is None else list(seeds)
+    if not seeds:
+        raise ValueError("At least one search seed is required.")
+    reused = None
+    if reuse_staged is not None:
+        reused = json.loads(Path(reuse_staged).read_text(encoding = "utf-8"))
+        checks = {"tuning_backend": physics_backend, "baseline_gains": json_safe(baseline),
+                  "parameters": json_safe({key: value for key, value in vars(parameters).items() if key.isupper()}),
+                  "training_scenarios": json_safe([asdict(case) for case in TRAINING_SCENARIOS]), "random_seeds": seeds}
+        if any(reused.get(key) != value for key, value in checks.items()):
+            raise ValueError("Saved staged search does not match the current backend, gains, settings, scenarios or seeds. Run without --reuse-staged.")
+    try:
+        for seed in seeds:
+            RANDOM_SEED = seed
+            staged = None if reused is not None else tune_controllers(physics_backend)
+            for fraction in (1.0, 0.5):
+                if reused is not None:
+                    previous = next(entry for entry in reused["searches"] if entry["seed"] == seed and entry["fraction"] == fraction)
+                    candidate = {key: np.asarray(previous["gains"][key], dtype = float) for key in baseline}
+                    stage_scores = previous["stage_scores"]
+                else:
+                    candidate = {key: baseline[key] + fraction * (staged[key] - baseline[key]) for key in baseline}
+                    stage_scores = staged["scores"]
+                training = evaluate_suite(candidate, TRAINING_SCENARIOS, (physics_backend,))
+                searches.append({"seed": seed, "fraction": fraction, "gains": candidate, "training": training, "stage_scores": stage_scores})
+                if training["score"] < best_training["score"] and training["success_rate"] >= baseline_training["success_rate"]:
+                    best, best_training = candidate, training
+    finally:
+        RANDOM_SEED = original_seed
+
+    before_joint_score = best_training["score"]
+    best, best_training, joint = refine_joint(
+        best, best_training, baseline,
+        lambda gains: evaluate_suite(gains, TRAINING_SCENARIOS, (physics_backend,)),
+        joint_trials, np.random.default_rng(seeds[0] + 1009))
+    joint["starting_score"] = before_joint_score
+    joint["final_score"] = best_training["score"]
+
+    # No further candidate selection follows this held-out evaluation.
+    validation = validate_candidate(baseline, best, validation_backends)
+    changed = any(not np.array_equal(best[key], baseline[key]) for key in baseline)
+    accepted = bool(changed and validation["candidate_accepted"])
+    validation["heldout_gate_passed"] = validation["candidate_accepted"]
+    validation["candidate_accepted"] = accepted
+    selected = best if accepted else baseline
+    before = metric_summary(validation["baseline"])
+    after = metric_summary(validation["candidate"])
+    report = {
+        "schema_version": 2, "gain_order": ["Kp", "Ki", "Kd"],
+        "stage_order": ["roll", "pitch", "yaw", "height", "x", "y"],
+        "tuning_backend": physics_backend, "validation_backends": list(validation_backends),
+        "random_seeds": seeds, "trials_per_controller": reused["trials_per_controller"] if reused is not None else TRIALS_PER_CONTROLLER,
+        "training_scenarios": [asdict(case) for case in TRAINING_SCENARIOS],
+        "validation_scenarios": [asdict(case) for case in VALIDATION_SCENARIOS],
+        "baseline_gains": baseline, "candidate_gains": best, "selected_gains": selected,
+        "baseline_training": baseline_training, "candidate_training": best_training,
+        "before_after": {"baseline": before, "candidate": after,
+                         "candidate_minus_baseline": {key: after[key] - before[key] if after[key] is not None and before[key] is not None else None for key in before}},
+        "candidate_changed": changed,
+        "joint_refinement": joint,
+        "reused_staged_report": str(reuse_staged) if reuse_staged is not None else None,
+        "validation": validation, "candidate_accepted": accepted, "searches": searches,
+        "search_bounds": {"roll": ROLL_BOUNDS, "pitch": PITCH_BOUNDS, "yaw": YAW_BOUNDS,
+                          "height": HEIGHT_BOUNDS, "x": POSITION_BOUNDS, "y": POSITION_BOUNDS},
+        "parameters": {key: value for key, value in vars(parameters).items() if key.isupper()},
+        "score_weights": {"tracking_rmse_squared": 15, "final_error_squared": 120,
+                          "overshoot_squared": 20, "settling_seconds": 0.1, "saturation_fraction": 50,
+                          "normalized_motor_slew_squared": 0.05, "impact_above_0_15_m_s_squared": 200,
+                          "incomplete_or_failed_mission": 10000},
+        "scope": "Recommendations only; held-out validation never guides search. No global optimality claim."
+    }
+    path = output_path("pid_tuning_report.json")
+    path.write_text(json.dumps(json_safe(report), indent = 2, allow_nan = False), encoding = "utf-8")
+    output_path("optimized_pid_gains.json").write_text(json.dumps(json_safe({
+        "gain_order": ["Kp", "Ki", "Kd"], "recommended_new_gains": selected,
+        "candidate_accepted": accepted, "source_report": path.name}), indent = 2, allow_nan = False), encoding = "utf-8")
+    print(f"Candidate accepted: {accepted}; current parameters have not been changed.")
+    if not changed:
+        print("No training candidate improved on the baseline; baseline retained before validation.")
+    for label, result in (("Baseline", validation["baseline"]), ("Candidate" if changed else "Retained baseline", validation["candidate"])):
+        print(f"{label}: held-out score={result['score']:.3f}, success={result['success_rate']:.0%}")
+    print(f"Saved {path}")
+    return report
+
+
 def main():
 
-    print("Starting staged PID search...")
-    print(
-        "Stages: height, roll, pitch, yaw, "
-        "X position, Y position"
-    )
-    print(
-        f"Trials per controller: {TRIALS_PER_CONTROLLER}"
-    )
-
-    gains = tune_controllers()
-    gains, validation_history, validation_score, validation = validate_recommendations(gains)
-    if not validation["candidate_accepted"]:
-        print("Candidate did not pass baseline comparison; keeping the current gains.")
-    print_recommendations(gains)
-
-    print(
-        "\nCombined X/Y validation score: "
-        f"{validation_score:.6f}"
-    )
-
-    save_json(gains, validation_score, validation)
-    plotting.plot_validation(validation_history, target_height = TARGET_HEIGHT,
-                             hover_speed = HOVER_SPEED, max_motor_speed = MAX_MOTOR_SPEED)
-
-    print(f"\nSaved {output_path('optimized_pid_gains.json')}")
-    print(f"Saved {output_path('auto_tune_results.png')}")
+    global TRIALS_PER_CONTROLLER
+    import argparse
+    parser = argparse.ArgumentParser(description = "Attitude-first PID tuning with training/validation scenarios.")
+    parser.add_argument("--backend", choices = ("simulation", "gym_pybullet"), default = "simulation")
+    parser.add_argument("--validation-backends", choices = ("simulation", "gym_pybullet"), nargs = "+", default = ["simulation", "gym_pybullet"])
+    parser.add_argument("--trials", type = int, default = TRIALS_PER_CONTROLLER)
+    parser.add_argument("--seed", type = int, default = RANDOM_SEED)
+    parser.add_argument("--joint-trials", type = int, default = 12, help = "Mission-level joint refinement candidates; 0 disables refinement.")
+    parser.add_argument("--reuse-staged", type = Path, help = "Reuse staged candidates from a matching report, then rerun training and joint refinement.")
+    args = parser.parse_args()
+    if args.trials < 3:
+        parser.error("--trials must be at least 3")
+    if args.joint_trials < 0:
+        parser.error("--joint-trials must be nonnegative")
+    TRIALS_PER_CONTROLLER = args.trials
+    run_workflow(args.backend, tuple(args.validation_backends), [args.seed], args.joint_trials, args.reuse_staged)
 
 
 if __name__ == "__main__":

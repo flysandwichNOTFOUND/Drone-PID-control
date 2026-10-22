@@ -1,4 +1,3 @@
-"""Terrain-aware alignment, descent, flare, and touchdown detection."""
 import numpy as np
 from drone_sim.validation import positive, vector
 

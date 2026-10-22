@@ -1,0 +1,3223 @@
+{
+  "schema_version": 2,
+  "gain_order": [
+    "Kp",
+    "Ki",
+    "Kd"
+  ],
+  "stage_order": [
+    "roll",
+    "pitch",
+    "yaw",
+    "height",
+    "x",
+    "y"
+  ],
+  "tuning_backend": "simulation",
+  "validation_backends": [
+    "simulation",
+    "gym_pybullet"
+  ],
+  "random_seeds": [
+    7
+  ],
+  "trials_per_controller": 90,
+  "training_scenarios": [
+    {
+      "name": "train_flat",
+      "terrain": "flat",
+      "seed": 11,
+      "destination": [
+        2.0,
+        0.0
+      ],
+      "yaw_degrees": 0.0,
+      "wind_mode": "none",
+      "wind_velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration": 60.0
+    },
+    {
+      "name": "train_hill_wind",
+      "terrain": "hill",
+      "seed": 12,
+      "destination": [
+        1.0,
+        1.5
+      ],
+      "yaw_degrees": 30,
+      "wind_mode": "constant",
+      "wind_velocity": [
+        0.4,
+        -0.2,
+        0.0
+      ],
+      "duration": 60.0
+    },
+    {
+      "name": "train_landscape",
+      "terrain": "landscape",
+      "seed": 13,
+      "destination": [
+        -1.5,
+        1.0
+      ],
+      "yaw_degrees": -30,
+      "wind_mode": "none",
+      "wind_velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration": 60.0
+    }
+  ],
+  "validation_scenarios": [
+    {
+      "name": "holdout_flat_gust",
+      "terrain": "flat",
+      "seed": 101,
+      "destination": [
+        -1.0,
+        -2.0
+      ],
+      "yaw_degrees": 90,
+      "wind_mode": "gust",
+      "wind_velocity": [
+        -0.3,
+        0.4,
+        0.0
+      ],
+      "duration": 60.0
+    },
+    {
+      "name": "holdout_hill",
+      "terrain": "hill",
+      "seed": 102,
+      "destination": [
+        2.0,
+        -1.0
+      ],
+      "yaw_degrees": -60,
+      "wind_mode": "none",
+      "wind_velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "duration": 60.0
+    },
+    {
+      "name": "holdout_landscape_wind",
+      "terrain": "landscape",
+      "seed": 103,
+      "destination": [
+        1.5,
+        -1.5
+      ],
+      "yaw_degrees": 45,
+      "wind_mode": "constant",
+      "wind_velocity": [
+        -0.3,
+        0.2,
+        0.0
+      ],
+      "duration": 60.0
+    }
+  ],
+  "baseline_gains": {
+    "height": [
+      211.09205955,
+      0.223363309,
+      93.863981577
+    ],
+    "roll": [
+      50.67943313,
+      0.026414318,
+      14.574450033
+    ],
+    "pitch": [
+      50.571938943,
+      0.0608505,
+      14.3523899
+    ],
+    "yaw": [
+      37.650316822,
+      0.048992121,
+      34.05348635
+    ],
+    "x": [
+      0.301072977,
+      0.000751421,
+      0.297699224
+    ],
+    "y": [
+      0.303979658,
+      0.004076894,
+      0.309451213
+    ]
+  },
+  "candidate_gains": {
+    "roll": [
+      48.93771167967091,
+      0.031942349628677966,
+      16.399264339076858
+    ],
+    "pitch": [
+      67.92011644774367,
+      0.08079642916065438,
+      9.64468748685471
+    ],
+    "yaw": [
+      37.14302040538523,
+      0.04378226479433398,
+      31.138992395745436
+    ],
+    "height": [
+      235.32244035220452,
+      0.1598273275245162,
+      106.24464963917133
+    ],
+    "x": [
+      0.4375550500357852,
+      0.0006495021662962225,
+      0.44654883599999995
+    ],
+    "y": [
+      0.45596948699999995,
+      0.004478701215431053,
+      0.43255743193741447
+    ]
+  },
+  "selected_gains": {
+    "roll": [
+      48.93771167967091,
+      0.031942349628677966,
+      16.399264339076858
+    ],
+    "pitch": [
+      67.92011644774367,
+      0.08079642916065438,
+      9.64468748685471
+    ],
+    "yaw": [
+      37.14302040538523,
+      0.04378226479433398,
+      31.138992395745436
+    ],
+    "height": [
+      235.32244035220452,
+      0.1598273275245162,
+      106.24464963917133
+    ],
+    "x": [
+      0.4375550500357852,
+      0.0006495021662962225,
+      0.44654883599999995
+    ],
+    "y": [
+      0.45596948699999995,
+      0.004478701215431053,
+      0.43255743193741447
+    ]
+  },
+  "baseline_training": {
+    "score": 2.832482976087957,
+    "success_rate": 1.0,
+    "cases": [
+      {
+        "scenario": {
+          "name": "train_flat",
+          "terrain": "flat",
+          "seed": 11,
+          "destination": [
+            2.0,
+            0.0
+          ],
+          "yaw_degrees": 0.0,
+          "wind_mode": "none",
+          "wind_velocity": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "duration": 60.0
+        },
+        "backend": "simulation",
+        "score": 2.2291919309015578,
+        "mission_complete": true,
+        "landed": true,
+        "landing_failed": false,
+        "tracking_rmse_m": 0.04040547753866068,
+        "final_error_m": 0.00032138082890664863,
+        "overshoot_m": 0.06951623255634765,
+        "settling_time_s": 19.835,
+        "saturation_fraction": 0.0002296211251435132,
+        "motor_slew_rms_per_s": 1.5037241061075461,
+        "touchdown_speed_m_s": 0.05540802498480703,
+        "duration_s": 23.275000000000002,
+        "stop_reason": "destination_reached"
+      },
+      {
+        "scenario": {
+          "name": "train_hill_wind",
+          "terrain": "hill",
+          "seed": 12,
+          "destination": [
+            1.0,
+            1.5
+          ],
+          "yaw_degrees": 30,
+          "wind_mode": "constant",
+          "wind_velocity": [
+            0.4,
+            -0.2,
+            0.0
+          ],
+          "duration": 60.0
+        },
+        "backend": "simulation",
+        "score": 2.31678852754873,
+        "mission_complete": true,
+        "landed": true,
+        "landing_failed": false,
+        "tracking_rmse_m": 0.046964804227373196,
+        "final_error_m": 0.027519511596956148,
+        "overshoot_m": 0.072316423867165,
+        "settling_time_s": 19.625,
+        "saturation_fraction": 0.0002318034306907742,
+        "motor_slew_rms_per_s": 1.5108993217918176,
+        "touchdown_speed_m_s": 0.054880114326807096,
+        "duration_s": 23.07,
+        "stop_reason": "destination_reached"
+      },
+      {
+        "scenario": {
+          "name": "train_landscape",
+          "terrain": "landscape",
+          "seed": 13,
+          "destination": [
+            -1.5,
+            1.0
+          ],
+          "yaw_degrees": -30,
+          "wind_mode": "none",
+          "wind_velocity": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "duration": 60.0
+        },
+        "backend": "simulation",
+        "score": 2.2138770741520357,
+        "mission_complete": true,
+        "landed": true,
+        "landing_failed": false,
+        "tracking_rmse_m": 0.038340574610668324,
+        "final_error_m": 0.0007797790790424376,
+        "overshoot_m": 0.06737261102819476,
+        "settling_time_s": 19.76,
+        "saturation_fraction": 0.0002304147465437788,
+        "motor_slew_rms_per_s": 1.5063333025470862,
+        "touchdown_speed_m_s": 0.05427062444635042,
+        "duration_s": 23.2,
+        "stop_reason": "destination_reached"
+      }
+    ]
+  },
+  "candidate_training": {
+    "score": 2.7078782740990643,
+    "success_rate": 1.0,
+    "cases": [
+      {
+        "scenario": {
+          "name": "train_flat",
+          "terrain": "flat",
+          "seed": 11,
+          "destination": [
+            2.0,
+            0.0
+          ],
+          "yaw_degrees": 0.0,
+          "wind_mode": "none",
+          "wind_velocity": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "duration": 60.0
+        },
+        "backend": "simulation",
+        "score": 2.1532431090538253,
+        "mission_complete": true,
+        "landed": true,
+        "landing_failed": false,
+        "tracking_rmse_m": 0.027130335841558002,
+        "final_error_m": 0.0001301077668678417,
+        "overshoot_m": 0.04047066138470967,
+        "settling_time_s": 19.85,
+        "saturation_fraction": 0.0002294630564479119,
+        "motor_slew_rms_per_s": 1.5031274687547727,
+        "touchdown_speed_m_s": 0.05508420441086817,
+        "duration_s": 23.29,
+        "stop_reason": "destination_reached"
+      },
+      {
+        "scenario": {
+          "name": "train_hill_wind",
+          "terrain": "hill",
+          "seed": 12,
+          "destination": [
+            1.0,
+            1.5
+          ],
+          "yaw_degrees": 30,
+          "wind_mode": "constant",
+          "wind_velocity": [
+            0.4,
+            -0.2,
+            0.0
+          ],
+          "duration": 60.0
+        },
+        "backend": "simulation",
+        "score": 2.1873502315345252,
+        "mission_complete": true,
+        "landed": true,
+        "landing_failed": false,
+        "tracking_rmse_m": 0.03229296099274324,
+        "final_error_m": 0.019375464529403905,
+        "overshoot_m": 0.0435878881205877,
+        "settling_time_s": 19.63,
+        "saturation_fraction": 0.00023169601482854495,
+        "motor_slew_rms_per_s": 1.5104687083421173,
+        "touchdown_speed_m_s": 0.05450952570066461,
+        "duration_s": 23.080000000000002,
+        "stop_reason": "destination_reached"
+      },
+      {
+        "scenario": {
+          "name": "train_landscape",
+          "terrain": "landscape",
+          "seed": 13,
+          "destination": [
+            -1.5,
+            1.0
+          ],
+          "yaw_degrees": -30,
+          "wind_mode": "none",
+          "wind_velocity": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "duration": 60.0
+        },
+        "backend": "simulation",
+        "score": 2.142528808057949,
+        "mission_complete": true,
+        "landed": true,
+        "landing_failed": false,
+        "tracking_rmse_m": 0.026071188426923648,
+        "final_error_m": 0.0004029914512819564,
+        "overshoot_m": 0.03927556903425519,
+        "settling_time_s": 19.765,
+        "saturation_fraction": 0.0002304147465437788,
+        "motor_slew_rms_per_s": 1.5062640739817845,
+        "touchdown_speed_m_s": 0.054080241734403386,
+        "duration_s": 23.2,
+        "stop_reason": "destination_reached"
+      }
+    ]
+  },
+  "before_after": {
+    "baseline": {
+      "score": 2.9459301443242794,
+      "success_rate": 1.0,
+      "tracking_rmse_m": 0.04580961693328589,
+      "overshoot_m": 0.06371085899411752,
+      "settling_time_s": 20.033333333333335,
+      "saturation_fraction": 0.00022998046794914186,
+      "motor_slew_rms_per_s": 1.5050634743125224,
+      "touchdown_speed_m_s": 0.057323127476180895,
+      "final_error_m": 0.025057096588169375,
+      "unsettled_or_failed_cases": 0
+    },
+    "candidate": {
+      "score": 2.8426552877938995,
+      "success_rate": 1.0,
+      "tracking_rmse_m": 0.03133365180790611,
+      "overshoot_m": 0.03789642906831128,
+      "settling_time_s": 20.051666666666666,
+      "saturation_fraction": 0.0002298045257024888,
+      "motor_slew_rms_per_s": 1.5044406814773936,
+      "touchdown_speed_m_s": 0.04646466434990585,
+      "final_error_m": 0.022203375809178815,
+      "unsettled_or_failed_cases": 0
+    },
+    "candidate_minus_baseline": {
+      "score": -0.10327485653037982,
+      "success_rate": 0.0,
+      "tracking_rmse_m": -0.014475965125379783,
+      "overshoot_m": -0.025814429925806237,
+      "settling_time_s": 0.01833333333333087,
+      "saturation_fraction": -1.7594224665306115e-07,
+      "motor_slew_rms_per_s": -0.0006227928351287826,
+      "touchdown_speed_m_s": -0.010858463126275045,
+      "final_error_m": -0.00285372077899056,
+      "unsettled_or_failed_cases": 0
+    }
+  },
+  "candidate_changed": true,
+  "joint_refinement": {
+    "trials": [
+      {
+        "trial": 1,
+        "gains": {
+          "roll": [
+            50.67943313,
+            0.026414318,
+            14.574450033
+          ],
+          "pitch": [
+            50.571938943,
+            0.0608505,
+            14.3523899
+          ],
+          "yaw": [
+            37.650316822,
+            0.048992121,
+            34.05348635
+          ],
+          "height": [
+            211.09205955,
+            0.223363309,
+            93.863981577
+          ],
+          "x": [
+            0.34623392355,
+            0.000751421,
+            0.3125841852
+          ],
+          "y": [
+            0.34957660669999996,
+            0.004076894,
+            0.32492377365
+          ]
+        },
+        "training": {
+          "score": 2.7862207514394925,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.2033988678909004,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03679724622562147,
+              "final_error_m": 0.00023156988790429424,
+              "overshoot_m": 0.06125418660327053,
+              "settling_time_s": 19.835,
+              "saturation_fraction": 0.0002296211251435132,
+              "motor_slew_rms_per_s": 1.5037241050456418,
+              "touchdown_speed_m_s": 0.05540802494135998,
+              "duration_s": 23.275000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.265764820908793,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.042387982575372456,
+              "final_error_m": 0.024169841918511317,
+              "overshoot_m": 0.06362038452490797,
+              "settling_time_s": 19.62,
+              "saturation_fraction": 0.00023185717597959656,
+              "motor_slew_rms_per_s": 1.5110792736439698,
+              "touchdown_speed_m_s": 0.054965227393206,
+              "duration_s": 23.065,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.19017494983719,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03508115603581238,
+              "final_error_m": 0.0005975067197513956,
+              "overshoot_m": 0.05945544602968947,
+              "settling_time_s": 19.76,
+              "saturation_fraction": 0.0002304147465437788,
+              "motor_slew_rms_per_s": 1.5063336742731426,
+              "touchdown_speed_m_s": 0.05428997912516734,
+              "duration_s": 23.2,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": true,
+        "cached": false,
+        "previous_best_score": 2.832482976087957
+      },
+      {
+        "trial": 2,
+        "gains": {
+          "roll": [
+            50.67943313,
+            0.026414318,
+            14.574450033
+          ],
+          "pitch": [
+            50.571938943,
+            0.0608505,
+            14.3523899
+          ],
+          "yaw": [
+            37.650316822,
+            0.048992121,
+            34.05348635
+          ],
+          "height": [
+            211.09205955,
+            0.223363309,
+            93.863981577
+          ],
+          "x": [
+            0.3635456197275,
+            0.000751421,
+            0.3594718129799999
+          ],
+          "y": [
+            0.367055437035,
+            0.004076894,
+            0.3736623396975
+          ]
+        },
+        "training": {
+          "score": 2.7583632679895764,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1844894168808446,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03403909621678203,
+              "final_error_m": 0.0002462629602941759,
+              "overshoot_m": 0.05434237415717913,
+              "settling_time_s": 19.835,
+              "saturation_fraction": 0.0002296211251435132,
+              "motor_slew_rms_per_s": 1.5037241071459075,
+              "touchdown_speed_m_s": 0.05540802533800925,
+              "duration_s": 23.275000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.2391968000902205,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.039582942440563866,
+              "final_error_m": 0.02314421758409156,
+              "overshoot_m": 0.056416033174500745,
+              "settling_time_s": 19.62,
+              "saturation_fraction": 0.00023185717597959656,
+              "motor_slew_rms_per_s": 1.5110780814699512,
+              "touchdown_speed_m_s": 0.05492979610704318,
+              "duration_s": 23.065,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1720059869299972,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03251171747527732,
+              "final_error_m": 0.0005682825083798854,
+              "overshoot_m": 0.05250678941709427,
+              "settling_time_s": 19.76,
+              "saturation_fraction": 0.0002304147465437788,
+              "motor_slew_rms_per_s": 1.5063337007846764,
+              "touchdown_speed_m_s": 0.05427821514444394,
+              "duration_s": 23.2,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": true,
+        "cached": false,
+        "previous_best_score": 2.7862207514394925
+      },
+      {
+        "trial": 3,
+        "gains": {
+          "roll": [
+            50.67943313,
+            0.026414318,
+            14.574450033
+          ],
+          "pitch": [
+            50.571938943,
+            0.0608505,
+            14.3523899
+          ],
+          "yaw": [
+            37.650316822,
+            0.048992121,
+            34.05348635
+          ],
+          "height": [
+            211.09205955,
+            0.223363309,
+            93.863981577
+          ],
+          "x": [
+            0.32719105775475,
+            0.000751421,
+            0.3954189942779999
+          ],
+          "y": [
+            0.3303498933315,
+            0.004076894,
+            0.41102857366725004
+          ]
+        },
+        "training": {
+          "score": 2.764081533272034,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.181664129328909,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.034409972472977945,
+              "final_error_m": 0.00027362029883493236,
+              "overshoot_m": 0.05284604335156251,
+              "settling_time_s": 19.835,
+              "saturation_fraction": 0.0002296211251435132,
+              "motor_slew_rms_per_s": 1.503724109412429,
+              "touchdown_speed_m_s": 0.05540802535906571,
+              "duration_s": 23.275000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.2524076842215877,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.04106414827416,
+              "final_error_m": 0.02555558958183848,
+              "overshoot_m": 0.05521862723011921,
+              "settling_time_s": 19.62,
+              "saturation_fraction": 0.00023185717597959656,
+              "motor_slew_rms_per_s": 1.511081376973146,
+              "touchdown_speed_m_s": 0.05502732258533372,
+              "duration_s": 23.065,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1688670230994145,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03275600906782861,
+              "final_error_m": 0.0006722276627692333,
+              "overshoot_m": 0.05086535388375987,
+              "settling_time_s": 19.76,
+              "saturation_fraction": 0.0002304147465437788,
+              "motor_slew_rms_per_s": 1.5063335122301211,
+              "touchdown_speed_m_s": 0.054273615421132335,
+              "duration_s": 23.2,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": false,
+        "cached": false,
+        "previous_best_score": 2.7583632679895764
+      },
+      {
+        "trial": 4,
+        "gains": {
+          "roll": [
+            50.67943313,
+            0.026414318,
+            14.574450033
+          ],
+          "pitch": [
+            50.571938943,
+            0.0608505,
+            14.3523899
+          ],
+          "yaw": [
+            37.650316822,
+            0.048992121,
+            34.05348635
+          ],
+          "height": [
+            211.09205955,
+            0.223363309,
+            93.863981577
+          ],
+          "x": [
+            0.39990018170025005,
+            0.000751421,
+            0.3235246316819999
+          ],
+          "y": [
+            0.40376098073850003,
+            0.004076894,
+            0.33629610572775004
+          ]
+        },
+        "training": {
+          "score": 2.749030893670039,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1821902233851374,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03366339016482143,
+              "final_error_m": 0.00015981815260257833,
+              "overshoot_m": 0.053454857332618566,
+              "settling_time_s": 19.835,
+              "saturation_fraction": 0.0002296211251435132,
+              "motor_slew_rms_per_s": 1.5037241043295573,
+              "touchdown_speed_m_s": 0.05540802489941656,
+              "duration_s": 23.275000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.2253331811949946,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.038362990370438596,
+              "final_error_m": 0.02111905632543367,
+              "overshoot_m": 0.055468171343742656,
+              "settling_time_s": 19.625,
+              "saturation_fraction": 0.0002317497103128621,
+              "motor_slew_rms_per_s": 1.5107203895712742,
+              "touchdown_speed_m_s": 0.05482305687603393,
+              "duration_s": 23.075,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1705693905337387,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03226461306650717,
+              "final_error_m": 0.00046111106893607625,
+              "overshoot_m": 0.05194034141777197,
+              "settling_time_s": 19.76,
+              "saturation_fraction": 0.0002304147465437788,
+              "motor_slew_rms_per_s": 1.5063338157230368,
+              "touchdown_speed_m_s": 0.054317884647388216,
+              "duration_s": 23.2,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": true,
+        "cached": false,
+        "previous_best_score": 2.7583632679895764
+      },
+      {
+        "trial": 5,
+        "gains": {
+          "roll": [
+            42.57709570930758,
+            0.03011451009960553,
+            16.86948960200595
+          ],
+          "pitch": [
+            58.53212157171255,
+            0.06434380989156055,
+            12.49870637955829
+          ],
+          "yaw": [
+            33.57124030336462,
+            0.061911570184619395,
+            36.92904883443862
+          ],
+          "height": [
+            185.8761006247808,
+            0.17397132343529867,
+            91.59455325806712
+          ],
+          "x": [
+            0.44022356362872384,
+            0.0008425478338161608,
+            0.32751941089852976
+          ],
+          "y": [
+            0.4115755369427785,
+            0.004420335691772741,
+            0.40636216503840533
+          ]
+        },
+        "training": {
+          "score": 2.7257297605019604,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1692724207833534,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03245006339496808,
+              "final_error_m": 0.0001706844774864715,
+              "overshoot_m": 0.048655124685983875,
+              "settling_time_s": 19.815,
+              "saturation_fraction": 0.00022977941176470588,
+              "motor_slew_rms_per_s": 1.5042501908457946,
+              "touchdown_speed_m_s": 0.05571885247795356,
+              "duration_s": 23.26,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.2000324386500596,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03673338212711511,
+              "final_error_m": 0.019495280655728583,
+              "overshoot_m": 0.04893629023789839,
+              "settling_time_s": 19.605,
+              "saturation_fraction": 0.00023191094619666049,
+              "motor_slew_rms_per_s": 1.5112487863773116,
+              "touchdown_speed_m_s": 0.054999344799160084,
+              "duration_s": 23.06,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.157860093084922,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03123275157657533,
+              "final_error_m": 0.0004806038048002651,
+              "overshoot_m": 0.04672752774591282,
+              "settling_time_s": 19.745,
+              "saturation_fraction": 0.0002305209774089442,
+              "motor_slew_rms_per_s": 1.506683895592239,
+              "touchdown_speed_m_s": 0.054560910408370876,
+              "duration_s": 23.19,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": true,
+        "cached": false,
+        "previous_best_score": 2.749030893670039
+      },
+      {
+        "trial": 6,
+        "gains": {
+          "roll": [
+            38.798788650659056,
+            0.03407532357546537,
+            17.22369106106021
+          ],
+          "pitch": [
+            63.458528026605194,
+            0.0817715893240678,
+            11.01260757946568
+          ],
+          "yaw": [
+            37.15446390223612,
+            0.045872395484319387,
+            34.97539272337741
+          ],
+          "height": [
+            171.8360931044948,
+            0.16397790041699045,
+            108.11761473618932
+          ],
+          "x": [
+            0.45160946550000003,
+            0.000689049034038443,
+            0.36873301661145136
+          ],
+          "y": [
+            0.45596948699999995,
+            0.004318780706977868,
+            0.4283550597375173
+          ]
+        },
+        "training": {
+          "score": 2.7123410259985397,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.160397906206758,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.031239966599991197,
+              "final_error_m": 0.00013473223008525644,
+              "overshoot_m": 0.04482050855747621,
+              "settling_time_s": 19.81,
+              "saturation_fraction": 0.00022972662531587412,
+              "motor_slew_rms_per_s": 1.5039468352542344,
+              "touchdown_speed_m_s": 0.055076090015057186,
+              "duration_s": 23.265,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1875439823272362,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03526732948955095,
+              "final_error_m": 0.019371977534436466,
+              "overshoot_m": 0.04417251283013246,
+              "settling_time_s": 19.59,
+              "saturation_fraction": 0.0002320185614849188,
+              "motor_slew_rms_per_s": 1.5114843491561027,
+              "touchdown_speed_m_s": 0.05450319029633908,
+              "duration_s": 23.05,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1484232027161974,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.0300722930077562,
+              "final_error_m": 0.00033350467903537083,
+              "overshoot_m": 0.04260474305584307,
+              "settling_time_s": 19.735,
+              "saturation_fraction": 0.00023057412958266084,
+              "motor_slew_rms_per_s": 1.5067363702671972,
+              "touchdown_speed_m_s": 0.054036877737771376,
+              "duration_s": 23.185,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": true,
+        "cached": false,
+        "previous_best_score": 2.7257297605019604
+      },
+      {
+        "trial": 7,
+        "gains": {
+          "roll": [
+            47.798856133803284,
+            0.035247810084892,
+            18.388936087688673
+          ],
+          "pitch": [
+            54.97003968731558,
+            0.08889935052997341,
+            10.354976409259896
+          ],
+          "yaw": [
+            29.99719883060122,
+            0.04181401361709743,
+            41.937996147497536
+          ],
+          "height": [
+            172.5882782706239,
+            0.16596294926718283,
+            126.27018536397965
+          ],
+          "x": [
+            0.3890317172807566,
+            0.0007929953257532416,
+            0.3281128520673353
+          ],
+          "y": [
+            0.45596948699999995,
+            0.004124399169966259,
+            0.408447292588984
+          ]
+        },
+        "training": {
+          "score": 2.7363597283006125,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.180522440248655,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03407277222475337,
+              "final_error_m": 0.00020770663783764592,
+              "overshoot_m": 0.05340104454661487,
+              "settling_time_s": 19.815,
+              "saturation_fraction": 0.00022972662531587412,
+              "motor_slew_rms_per_s": 1.5038829319969245,
+              "touchdown_speed_m_s": 0.05484051234684673,
+              "duration_s": 23.265,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.2100145385620746,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03678495846952304,
+              "final_error_m": 0.02154535618703618,
+              "overshoot_m": 0.04934220574985038,
+              "settling_time_s": 19.595,
+              "saturation_fraction": 0.0002320185614849188,
+              "motor_slew_rms_per_s": 1.511418292805788,
+              "touchdown_speed_m_s": 0.054452234737956816,
+              "duration_s": 23.05,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1610313021695533,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.031752932541464454,
+              "final_error_m": 0.00039017575471071334,
+              "overshoot_m": 0.04866121703225331,
+              "settling_time_s": 19.735,
+              "saturation_fraction": 0.00023057412958266084,
+              "motor_slew_rms_per_s": 1.5066672857676917,
+              "touchdown_speed_m_s": 0.053754149540708,
+              "duration_s": 23.185,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": false,
+        "cached": false,
+        "previous_best_score": 2.7123410259985397
+      },
+      {
+        "trial": 8,
+        "gains": {
+          "roll": [
+            42.73527153151919,
+            0.03751665360002721,
+            17.807812477170376
+          ],
+          "pitch": [
+            55.59649507877258,
+            0.0871273465500564,
+            10.54380963705178
+          ],
+          "yaw": [
+            42.99568453073584,
+            0.043277346446650655,
+            32.61726484633084
+          ],
+          "height": [
+            182.82886516822612,
+            0.12040072160995809,
+            123.54118737128371
+          ],
+          "x": [
+            0.45160946550000003,
+            0.0007616799881957375,
+            0.2904074616552291
+          ],
+          "y": [
+            0.4494072670684231,
+            0.003671979616901809,
+            0.4529901970284715
+          ]
+        },
+        "training": {
+          "score": 2.718937031798628,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.17024788609859,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.032143385551156395,
+              "final_error_m": 0.00014806896608691644,
+              "overshoot_m": 0.049333065867203096,
+              "settling_time_s": 19.815,
+              "saturation_fraction": 0.00022972662531587412,
+              "motor_slew_rms_per_s": 1.5039011777709306,
+              "touchdown_speed_m_s": 0.05498452089573616,
+              "duration_s": 23.265,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.189657656510219,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03471092753616722,
+              "final_error_m": 0.019201062358430533,
+              "overshoot_m": 0.04533727241328095,
+              "settling_time_s": 19.605,
+              "saturation_fraction": 0.00023185717597959656,
+              "motor_slew_rms_per_s": 1.5109004565114268,
+              "touchdown_speed_m_s": 0.05424508792252799,
+              "duration_s": 23.065,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1546623104044116,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.030198307811506876,
+              "final_error_m": 0.0003859674844765123,
+              "overshoot_m": 0.045546316118272125,
+              "settling_time_s": 19.745,
+              "saturation_fraction": 0.00023046784973496196,
+              "motor_slew_rms_per_s": 1.5063375202834568,
+              "touchdown_speed_m_s": 0.053837306672292425,
+              "duration_s": 23.195,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": false,
+        "cached": false,
+        "previous_best_score": 2.7123410259985397
+      },
+      {
+        "trial": 9,
+        "gains": {
+          "roll": [
+            45.46170071950964,
+            0.03313566011161255,
+            17.301704529586726
+          ],
+          "pitch": [
+            67.74899533762668,
+            0.08424151479737896,
+            12.810647625997575
+          ],
+          "yaw": [
+            39.5162708775524,
+            0.042742702375391885,
+            38.55033427249662
+          ],
+          "height": [
+            210.0204455460633,
+            0.15360374761267287,
+            104.03432855505528
+          ],
+          "x": [
+            0.4348875767027723,
+            0.0006325373433915057,
+            0.4268664690760164
+          ],
+          "y": [
+            0.45596948699999995,
+            0.004636315087075507,
+            0.4641768195
+          ]
+        },
+        "training": {
+          "score": 2.7092561785378524,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1562808277798013,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.02880690577741882,
+              "final_error_m": 0.00013476424279135508,
+              "overshoot_m": 0.04230840168990202,
+              "settling_time_s": 19.835,
+              "saturation_fraction": 0.0002296211251435132,
+              "motor_slew_rms_per_s": 1.5036622478227675,
+              "touchdown_speed_m_s": 0.05535543312854753,
+              "duration_s": 23.275000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1868269166938035,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03318035735793314,
+              "final_error_m": 0.019323088754203372,
+              "overshoot_m": 0.043212253339873885,
+              "settling_time_s": 19.625,
+              "saturation_fraction": 0.00023169601482854495,
+              "motor_slew_rms_per_s": 1.51047202146777,
+              "touchdown_speed_m_s": 0.054523917659558344,
+              "duration_s": 23.080000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1445406036196,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.02749194716501628,
+              "final_error_m": 0.00042956396246179315,
+              "overshoot_m": 0.04015451191647973,
+              "settling_time_s": 19.76,
+              "saturation_fraction": 0.000230361667818475,
+              "motor_slew_rms_per_s": 1.5060914532395417,
+              "touchdown_speed_m_s": 0.054031847601830885,
+              "duration_s": 23.205000000000002,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": true,
+        "cached": false,
+        "previous_best_score": 2.7123410259985397
+      },
+      {
+        "trial": 10,
+        "gains": {
+          "roll": [
+            48.93771167967091,
+            0.031942349628677966,
+            16.399264339076858
+          ],
+          "pitch": [
+            67.92011644774367,
+            0.08079642916065438,
+            9.64468748685471
+          ],
+          "yaw": [
+            37.14302040538523,
+            0.04378226479433398,
+            31.138992395745436
+          ],
+          "height": [
+            235.32244035220452,
+            0.1598273275245162,
+            106.24464963917133
+          ],
+          "x": [
+            0.4375550500357852,
+            0.0006495021662962225,
+            0.44654883599999995
+          ],
+          "y": [
+            0.45596948699999995,
+            0.004478701215431053,
+            0.43255743193741447
+          ]
+        },
+        "training": {
+          "score": 2.7078782740990643,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1532431090538253,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.027130335841558002,
+              "final_error_m": 0.0001301077668678417,
+              "overshoot_m": 0.04047066138470967,
+              "settling_time_s": 19.85,
+              "saturation_fraction": 0.0002294630564479119,
+              "motor_slew_rms_per_s": 1.5031274687547727,
+              "touchdown_speed_m_s": 0.05508420441086817,
+              "duration_s": 23.29,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1873502315345252,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03229296099274324,
+              "final_error_m": 0.019375464529403905,
+              "overshoot_m": 0.0435878881205877,
+              "settling_time_s": 19.63,
+              "saturation_fraction": 0.00023169601482854495,
+              "motor_slew_rms_per_s": 1.5104687083421173,
+              "touchdown_speed_m_s": 0.05450952570066461,
+              "duration_s": 23.080000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.142528808057949,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.026071188426923648,
+              "final_error_m": 0.0004029914512819564,
+              "overshoot_m": 0.03927556903425519,
+              "settling_time_s": 19.765,
+              "saturation_fraction": 0.0002304147465437788,
+              "motor_slew_rms_per_s": 1.5062640739817845,
+              "touchdown_speed_m_s": 0.054080241734403386,
+              "duration_s": 23.2,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": true,
+        "cached": false,
+        "previous_best_score": 2.7092561785378524
+      },
+      {
+        "trial": 11,
+        "gains": {
+          "roll": [
+            46.18310660325187,
+            0.032147598912732764,
+            14.032639130131448
+          ],
+          "pitch": [
+            63.59885395507395,
+            0.07329871893153897,
+            8.913814580298666
+          ],
+          "yaw": [
+            38.2045938669756,
+            0.048264942587869605,
+            30.985297811759366
+          ],
+          "height": [
+            212.381542426045,
+            0.16047963906853407,
+            103.03506267561781
+          ],
+          "x": [
+            0.41299077821359803,
+            0.0005998407347928082,
+            0.42583083374733655
+          ],
+          "y": [
+            0.4382453903039238,
+            0.003925532679590538,
+            0.4337890932918615
+          ]
+        },
+        "training": {
+          "score": 2.71646014432057,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1578111671694407,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.029145958994239864,
+              "final_error_m": 0.00014019127516595736,
+              "overshoot_m": 0.04303161933618416,
+              "settling_time_s": 19.835,
+              "saturation_fraction": 0.0002296211251435132,
+              "motor_slew_rms_per_s": 1.5036691347616016,
+              "touchdown_speed_m_s": 0.05536164303201767,
+              "duration_s": 23.275000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.197234789643051,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03407936907210515,
+              "final_error_m": 0.02066395460234812,
+              "overshoot_m": 0.04495076443468315,
+              "settling_time_s": 19.625,
+              "saturation_fraction": 0.00023169601482854495,
+              "motor_slew_rms_per_s": 1.5104809241704185,
+              "touchdown_speed_m_s": 0.05457069519112594,
+              "duration_s": 23.080000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.146408383916929,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.027855131611321155,
+              "final_error_m": 0.0003735528086180221,
+              "overshoot_m": 0.04112094956773162,
+              "settling_time_s": 19.76,
+              "saturation_fraction": 0.000230361667818475,
+              "motor_slew_rms_per_s": 1.5060961476519816,
+              "touchdown_speed_m_s": 0.054016594311390276,
+              "duration_s": 23.205000000000002,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": false,
+        "cached": false,
+        "previous_best_score": 2.7078782740990643
+      },
+      {
+        "trial": 12,
+        "gains": {
+          "roll": [
+            48.78988983683244,
+            0.03182486952540809,
+            17.097889584730687
+          ],
+          "pitch": [
+            68.06640230844916,
+            0.07862930845914193,
+            8.655405365334511
+          ],
+          "yaw": [
+            40.272632620802604,
+            0.04676438406041841,
+            32.146294589738396
+          ],
+          "height": [
+            214.77396799783855,
+            0.13589144950493365,
+            97.18881561568881
+          ],
+          "x": [
+            0.4284758846854759,
+            0.0007151618712300025,
+            0.44654883599999995
+          ],
+          "y": [
+            0.45374916445659796,
+            0.0044892099049129025,
+            0.4374584211578616
+          ]
+        },
+        "training": {
+          "score": 2.7090498016857842,
+          "success_rate": 1.0,
+          "cases": [
+            {
+              "scenario": {
+                "name": "train_flat",
+                "terrain": "flat",
+                "seed": 11,
+                "destination": [
+                  2.0,
+                  0.0
+                ],
+                "yaw_degrees": 0.0,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.153070082724522,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.028240633441528197,
+              "final_error_m": 0.00016194956417692416,
+              "overshoot_m": 0.04066115941478943,
+              "settling_time_s": 19.835,
+              "saturation_fraction": 0.0002296211251435132,
+              "motor_slew_rms_per_s": 1.5037039654879258,
+              "touchdown_speed_m_s": 0.0553813642683464,
+              "duration_s": 23.275000000000002,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_hill_wind",
+                "terrain": "hill",
+                "seed": 12,
+                "destination": [
+                  1.0,
+                  1.5
+                ],
+                "yaw_degrees": 30,
+                "wind_mode": "constant",
+                "wind_velocity": [
+                  0.4,
+                  -0.2,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.189161299805224,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.03323559859033737,
+              "final_error_m": 0.019646225116651116,
+              "overshoot_m": 0.04363329355955918,
+              "settling_time_s": 19.625,
+              "saturation_fraction": 0.0002317497103128621,
+              "motor_slew_rms_per_s": 1.51069886865332,
+              "touchdown_speed_m_s": 0.05476407700997411,
+              "duration_s": 23.075,
+              "stop_reason": "destination_reached"
+            },
+            {
+              "scenario": {
+                "name": "train_landscape",
+                "terrain": "landscape",
+                "seed": 13,
+                "destination": [
+                  -1.5,
+                  1.0
+                ],
+                "yaw_degrees": -30,
+                "wind_mode": "none",
+                "wind_velocity": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "duration": 60.0
+              },
+              "backend": "simulation",
+              "score": 2.1430470476736874,
+              "mission_complete": true,
+              "landed": true,
+              "landing_failed": false,
+              "tracking_rmse_m": 0.027150172785399843,
+              "final_error_m": 0.00042532471201691774,
+              "overshoot_m": 0.03936912140551384,
+              "settling_time_s": 19.76,
+              "saturation_fraction": 0.0002304147465437788,
+              "motor_slew_rms_per_s": 1.5063138422933133,
+              "touchdown_speed_m_s": 0.05426876693934195,
+              "duration_s": 23.2,
+              "stop_reason": "destination_reached"
+            }
+          ]
+        },
+        "accepted": false,
+        "cached": false,
+        "previous_best_score": 2.7078782740990643
+      }
+    ],
+    "bounds": {
+      "roll": [
+        [
+          3.0,
+          76.019149695
+        ],
+        [
+          0.0,
+          0.2
+        ],
+        [
+          2.0,
+          21.8616750495
+        ]
+      ],
+      "pitch": [
+        [
+          3.0,
+          75.8579084145
+        ],
+        [
+          0.0,
+          0.2
+        ],
+        [
+          2.0,
+          21.52858485
+        ]
+      ],
+      "yaw": [
+        [
+          8.0,
+          56.475475233
+        ],
+        [
+          0.0,
+          0.2
+        ],
+        [
+          5.0,
+          51.080229525
+        ]
+      ],
+      "height": [
+        [
+          20.0,
+          316.638089325
+        ],
+        [
+          0.0,
+          2.0
+        ],
+        [
+          25.0,
+          140.7959723655
+        ]
+      ],
+      "x": [
+        [
+          0.002,
+          0.45160946550000003
+        ],
+        [
+          0.0,
+          0.01
+        ],
+        [
+          0.01,
+          0.44654883599999995
+        ]
+      ],
+      "y": [
+        [
+          0.002,
+          0.45596948699999995
+        ],
+        [
+          0.0,
+          0.01
+        ],
+        [
+          0.01,
+          0.4641768195
+        ]
+      ]
+    },
+    "controller_order": [
+      "roll",
+      "pitch",
+      "yaw",
+      "height",
+      "x",
+      "y"
+    ],
+    "starting_score": 2.832482976087957,
+    "final_score": 2.7078782740990643
+  },
+  "reused_staged_report": "outputs\\pid_tuning_report.json",
+  "validation": {
+    "candidate_accepted": true,
+    "baseline": {
+      "score": 2.9459301443242794,
+      "success_rate": 1.0,
+      "cases": [
+        {
+          "scenario": {
+            "name": "holdout_flat_gust",
+            "terrain": "flat",
+            "seed": 101,
+            "destination": [
+              -1.0,
+              -2.0
+            ],
+            "yaw_degrees": 90,
+            "wind_mode": "gust",
+            "wind_velocity": [
+              -0.3,
+              0.4,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "simulation",
+          "score": 2.3458086954113107,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.04482364538091124,
+          "final_error_m": 0.025992096153965666,
+          "overshoot_m": 0.0722399059458071,
+          "settling_time_s": 20.07,
+          "saturation_fraction": 0.00022716946842344388,
+          "motor_slew_rms_per_s": 1.4957945480126096,
+          "touchdown_speed_m_s": 0.055406895241034704,
+          "duration_s": 23.51,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_flat_gust",
+            "terrain": "flat",
+            "seed": 101,
+            "destination": [
+              -1.0,
+              -2.0
+            ],
+            "yaw_degrees": 90,
+            "wind_mode": "gust",
+            "wind_velocity": [
+              -0.3,
+              0.4,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "gym_pybullet",
+          "score": 2.344412862928039,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.04508325134963537,
+          "final_error_m": 0.025810755803609628,
+          "overshoot_m": 0.07231968345864528,
+          "settling_time_s": 20.04,
+          "saturation_fraction": 0.0002310536044362292,
+          "motor_slew_rms_per_s": 1.5088177046469888,
+          "touchdown_speed_m_s": 0.06197912494024155,
+          "duration_s": 23.14,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_hill",
+            "terrain": "hill",
+            "seed": 102,
+            "destination": [
+              2.0,
+              -1.0
+            ],
+            "yaw_degrees": -60,
+            "wind_mode": "none",
+            "wind_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "simulation",
+          "score": 2.258622978216009,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.042177319952533196,
+          "final_error_m": 0.0008320802496735962,
+          "overshoot_m": 0.07012032002696697,
+          "settling_time_s": 20.105,
+          "saturation_fraction": 0.00022680880018144704,
+          "motor_slew_rms_per_s": 1.494512461724882,
+          "touchdown_speed_m_s": 0.05441645213655269,
+          "duration_s": 23.545,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_hill",
+            "terrain": "hill",
+            "seed": 102,
+            "destination": [
+              2.0,
+              -1.0
+            ],
+            "yaw_degrees": -60,
+            "wind_mode": "none",
+            "wind_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "gym_pybullet",
+          "score": 2.4338039376314695,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.042741928082511,
+          "final_error_m": 0.03810363515068859,
+          "overshoot_m": 0.07010803464933929,
+          "settling_time_s": 20.075,
+          "saturation_fraction": 0.00023293733985557886,
+          "motor_slew_rms_per_s": 1.5147594696456514,
+          "touchdown_speed_m_s": 0.08062866649954155,
+          "duration_s": 22.965,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_landscape_wind",
+            "terrain": "landscape",
+            "seed": 103,
+            "destination": [
+              1.5,
+              -1.5
+            ],
+            "yaw_degrees": 45,
+            "wind_mode": "constant",
+            "wind_velocity": [
+              -0.3,
+              0.2,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "simulation",
+          "score": 2.259071884449272,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.0493812964239812,
+          "final_error_m": 0.02128624427347737,
+          "overshoot_m": 0.04869658809151711,
+          "settling_time_s": 19.97,
+          "saturation_fraction": 0.00022805017103762827,
+          "motor_slew_rms_per_s": 1.4986129058711501,
+          "touchdown_speed_m_s": 0.05468082815479857,
+          "duration_s": 23.425,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_landscape_wind",
+            "terrain": "landscape",
+            "seed": 103,
+            "destination": [
+              1.5,
+              -1.5
+            ],
+            "yaw_degrees": 45,
+            "wind_mode": "constant",
+            "wind_velocity": [
+              -0.3,
+              0.2,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "gym_pybullet",
+          "score": 2.3831546008623756,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.050650260410143325,
+          "final_error_m": 0.03831776789760142,
+          "overshoot_m": 0.0487806217924293,
+          "settling_time_s": 19.94,
+          "saturation_fraction": 0.00023386342376052386,
+          "motor_slew_rms_per_s": 1.5178837559738523,
+          "touchdown_speed_m_s": 0.03682679788491627,
+          "duration_s": 22.88,
+          "stop_reason": "destination_reached"
+        }
+      ]
+    },
+    "candidate": {
+      "score": 2.8426552877938995,
+      "success_rate": 1.0,
+      "cases": [
+        {
+          "scenario": {
+            "name": "holdout_flat_gust",
+            "terrain": "flat",
+            "seed": 101,
+            "destination": [
+              -1.0,
+              -2.0
+            ],
+            "yaw_degrees": 90,
+            "wind_mode": "gust",
+            "wind_velocity": [
+              -0.3,
+              0.4,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "simulation",
+          "score": 2.221254848311854,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.030286056837830286,
+          "final_error_m": 0.017943172344771267,
+          "overshoot_m": 0.04314628416607324,
+          "settling_time_s": 20.085,
+          "saturation_fraction": 0.00022701475595913735,
+          "motor_slew_rms_per_s": 1.495182284071358,
+          "touchdown_speed_m_s": 0.05508354379458501,
+          "duration_s": 23.525000000000002,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_flat_gust",
+            "terrain": "flat",
+            "seed": 101,
+            "destination": [
+              -1.0,
+              -2.0
+            ],
+            "yaw_degrees": 90,
+            "wind_mode": "gust",
+            "wind_velocity": [
+              -0.3,
+              0.4,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "gym_pybullet",
+          "score": 2.259807909249944,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.030421436687127462,
+          "final_error_m": 0.02553220685357095,
+          "overshoot_m": 0.04293856989853076,
+          "settling_time_s": 20.055,
+          "saturation_fraction": 0.00023094688221709007,
+          "motor_slew_rms_per_s": 1.5084890577741112,
+          "touchdown_speed_m_s": 0.04600477347779788,
+          "duration_s": 23.150000000000002,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_hill",
+            "terrain": "hill",
+            "seed": 102,
+            "destination": [
+              2.0,
+              -1.0
+            ],
+            "yaw_degrees": -60,
+            "wind_mode": "none",
+            "wind_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "simulation",
+          "score": 2.18277479006163,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.028685644733661413,
+          "final_error_m": 0.0004109588603198768,
+          "overshoot_m": 0.041842876612398244,
+          "settling_time_s": 20.125,
+          "saturation_fraction": 0.00022660321776569228,
+          "motor_slew_rms_per_s": 1.4937526103097853,
+          "touchdown_speed_m_s": 0.05408364306057937,
+          "duration_s": 23.565,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_hill",
+            "terrain": "hill",
+            "seed": 102,
+            "destination": [
+              2.0,
+              -1.0
+            ],
+            "yaw_degrees": -60,
+            "wind_mode": "none",
+            "wind_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "gym_pybullet",
+          "score": 2.35718611053602,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.02903954994532921,
+          "final_error_m": 0.03804947402309279,
+          "overshoot_m": 0.041863386068583044,
+          "settling_time_s": 20.095,
+          "saturation_fraction": 0.00023272050267628578,
+          "motor_slew_rms_per_s": 1.5140561073630667,
+          "touchdown_speed_m_s": 0.0390299746960665,
+          "duration_s": 22.985,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_landscape_wind",
+            "terrain": "landscape",
+            "seed": 103,
+            "destination": [
+              1.5,
+              -1.5
+            ],
+            "yaw_degrees": 45,
+            "wind_mode": "constant",
+            "wind_velocity": [
+              -0.3,
+              0.2,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "simulation",
+          "score": 2.184300587633243,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.034449179633460815,
+          "final_error_m": 0.015136250882048502,
+          "overshoot_m": 0.028669031026770653,
+          "settling_time_s": 19.990000000000002,
+          "saturation_fraction": 0.000227842333105491,
+          "motor_slew_rms_per_s": 1.4978403361152663,
+          "touchdown_speed_m_s": 0.05405062156615557,
+          "duration_s": 23.445,
+          "stop_reason": "destination_reached"
+        },
+        {
+          "scenario": {
+            "name": "holdout_landscape_wind",
+            "terrain": "landscape",
+            "seed": 103,
+            "destination": [
+              1.5,
+              -1.5
+            ],
+            "yaw_degrees": 45,
+            "wind_mode": "constant",
+            "wind_velocity": [
+              -0.3,
+              0.2,
+              0.0
+            ],
+            "duration": 60.0
+          },
+          "backend": "gym_pybullet",
+          "score": 2.314828315166676,
+          "mission_complete": true,
+          "landed": true,
+          "landing_failed": false,
+          "tracking_rmse_m": 0.035120043010027475,
+          "final_error_m": 0.03614819189126949,
+          "overshoot_m": 0.028918426637511756,
+          "settling_time_s": 19.96,
+          "saturation_fraction": 0.00023369946249123628,
+          "motor_slew_rms_per_s": 1.5173236932307734,
+          "touchdown_speed_m_s": 0.03053542950425076,
+          "duration_s": 22.895,
+          "stop_reason": "destination_reached"
+        }
+      ]
+    },
+    "scope": "Unseen seeds, routes, yaw and wind; validation is a gate, never a search objective.",
+    "heldout_gate_passed": true
+  },
+  "candidate_accepted": true,
+  "searches": [
+    {
+      "seed": 7,
+      "fraction": 1.0,
+      "gains": {
+        "height": [
+          182.05285422645437,
+          0.2615096338733138,
+          93.66136140441324
+        ],
+        "roll": [
+          50.60265217966319,
+          0.004439644462861939,
+          12.984554361548733
+        ],
+        "pitch": [
+          50.1204103978288,
+          0.0,
+          12.596953712585096
+        ],
+        "yaw": [
+          37.46949572940953,
+          0.030913432160980456,
+          28.314622562050538
+        ],
+        "x": [
+          0.16968680745801856,
+          0.0,
+          0.21143464553332408
+        ],
+        "y": [
+          0.17691786877785504,
+          0.0,
+          0.27934681849860177
+        ]
+      },
+      "training": {
+        "score": 3.217916265089104,
+        "success_rate": 1.0,
+        "cases": [
+          {
+            "scenario": {
+              "name": "train_flat",
+              "terrain": "flat",
+              "seed": 11,
+              "destination": [
+                2.0,
+                0.0
+              ],
+              "yaw_degrees": 0.0,
+              "wind_mode": "none",
+              "wind_velocity": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "duration": 60.0
+            },
+            "backend": "simulation",
+            "score": 2.465452303493476,
+            "mission_complete": true,
+            "landed": true,
+            "landing_failed": false,
+            "tracking_rmse_m": 0.06346059185579932,
+            "final_error_m": 8.488187739354953e-07,
+            "overshoot_m": 0.11375572371058684,
+            "settling_time_s": 20.240000000000002,
+            "saturation_fraction": 0.000225377507324769,
+            "motor_slew_rms_per_s": 1.4897478559948691,
+            "touchdown_speed_m_s": 0.05567640385409679,
+            "duration_s": 23.685,
+            "stop_reason": "destination_reached"
+          },
+          {
+            "scenario": {
+              "name": "train_hill_wind",
+              "terrain": "hill",
+              "seed": 12,
+              "destination": [
+                1.0,
+                1.5
+              ],
+              "yaw_degrees": 30,
+              "wind_mode": "constant",
+              "wind_velocity": [
+                0.4,
+                -0.2,
+                0.0
+              ],
+              "duration": 60.0
+            },
+            "backend": "simulation",
+            "score": 2.750871097230357,
+            "mission_complete": true,
+            "landed": true,
+            "landing_failed": false,
+            "tracking_rmse_m": 0.07295979843777514,
+            "final_error_m": 0.05338099091263819,
+            "overshoot_m": 0.09397906425810443,
+            "settling_time_s": 20.305,
+            "saturation_fraction": 0.0002248201438848921,
+            "motor_slew_rms_per_s": 1.487939474175633,
+            "touchdown_speed_m_s": 0.054942481540365656,
+            "duration_s": 23.740000000000002,
+            "stop_reason": "destination_reached"
+          },
+          {
+            "scenario": {
+              "name": "train_landscape",
+              "terrain": "landscape",
+              "seed": 13,
+              "destination": [
+                -1.5,
+                1.0
+              ],
+              "yaw_degrees": -30,
+              "wind_mode": "none",
+              "wind_velocity": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "duration": 60.0
+            },
+            "backend": "simulation",
+            "score": 2.374272071620711,
+            "mission_complete": true,
+            "landed": true,
+            "landing_failed": false,
+            "tracking_rmse_m": 0.057121355403922915,
+            "final_error_m": 2.970327963876771e-05,
+            "overshoot_m": 0.09914444545561887,
+            "settling_time_s": 20.055,
+            "saturation_fraction": 0.00022722108611679165,
+            "motor_slew_rms_per_s": 1.495832554124489,
+            "touchdown_speed_m_s": 0.05434452327442442,
+            "duration_s": 23.505,
+            "stop_reason": "destination_reached"
+          }
+        ]
+      },
+      "stage_scores": {
+        "roll": 1.4624773251773338,
+        "pitch": 1.453930532418823,
+        "yaw": 5.491927054455765,
+        "height": 3.8168764772039028,
+        "x": 8.959093353984247,
+        "y": 8.502003384466985
+      }
+    },
+    {
+      "seed": 7,
+      "fraction": 0.5,
+      "gains": {
+        "height": [
+          196.57245688822718,
+          0.2424364714366569,
+          93.76267149070662
+        ],
+        "roll": [
+          50.641042654831594,
+          0.01542698123143097,
+          13.779502197274367
+        ],
+        "pitch": [
+          50.3461746704144,
+          0.03042525,
+          13.474671806292548
+        ],
+        "yaw": [
+          37.55990627570476,
+          0.03995277658049023,
+          31.18405445602527
+        ],
+        "x": [
+          0.2353798922290093,
+          0.0003757105,
+          0.25456693476666203
+        ],
+        "y": [
+          0.2404487633889275,
+          0.002038447,
+          0.2943990157493009
+        ]
+      },
+      "training": {
+        "score": 2.9523461782193894,
+        "success_rate": 1.0,
+        "cases": [
+          {
+            "scenario": {
+              "name": "train_flat",
+              "terrain": "flat",
+              "seed": 11,
+              "destination": [
+                2.0,
+                0.0
+              ],
+              "yaw_degrees": 0.0,
+              "wind_mode": "none",
+              "wind_velocity": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "duration": 60.0
+            },
+            "backend": "simulation",
+            "score": 2.3011327238241135,
+            "mission_complete": true,
+            "landed": true,
+            "landing_failed": false,
+            "tracking_rmse_m": 0.04947927913621572,
+            "final_error_m": 0.0002721617232035457,
+            "overshoot_m": 0.08829465086122479,
+            "settling_time_s": 19.84,
+            "saturation_fraction": 0.00022951572182694515,
+            "motor_slew_rms_per_s": 1.5033705845242007,
+            "touchdown_speed_m_s": 0.05545630031069175,
+            "duration_s": 23.285,
+            "stop_reason": "destination_reached"
+          },
+          {
+            "scenario": {
+              "name": "train_hill_wind",
+              "terrain": "hill",
+              "seed": 12,
+              "destination": [
+                1.0,
+                1.5
+              ],
+              "yaw_degrees": 30,
+              "wind_mode": "constant",
+              "wind_velocity": [
+                0.4,
+                -0.2,
+                0.0
+              ],
+              "duration": 60.0
+            },
+            "backend": "simulation",
+            "score": 2.451043137144735,
+            "mission_complete": true,
+            "landed": true,
+            "landing_failed": false,
+            "tracking_rmse_m": 0.056799542874955256,
+            "final_error_m": 0.036316311967727916,
+            "overshoot_m": 0.08412859938449183,
+            "settling_time_s": 19.78,
+            "saturation_fraction": 0.00023014959723820482,
+            "motor_slew_rms_per_s": 1.5054930736496916,
+            "touchdown_speed_m_s": 0.05495482191372906,
+            "duration_s": 23.225,
+            "stop_reason": "destination_reached"
+          },
+          {
+            "scenario": {
+              "name": "train_landscape",
+              "terrain": "landscape",
+              "seed": 13,
+              "destination": [
+                -1.5,
+                1.0
+              ],
+              "yaw_degrees": -30,
+              "wind_mode": "none",
+              "wind_velocity": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "duration": 60.0
+            },
+            "backend": "simulation",
+            "score": 2.266580320830769,
+            "mission_complete": true,
+            "landed": true,
+            "landing_failed": false,
+            "tracking_rmse_m": 0.04588605603412331,
+            "final_error_m": 0.000677997148605782,
+            "overshoot_m": 0.08213160131733772,
+            "settling_time_s": 19.75,
+            "saturation_fraction": 0.0002305209774089442,
+            "motor_slew_rms_per_s": 1.5066795251133989,
+            "touchdown_speed_m_s": 0.05442610284275086,
+            "duration_s": 23.19,
+            "stop_reason": "destination_reached"
+          }
+        ]
+      },
+      "stage_scores": {
+        "roll": 1.4624773251773338,
+        "pitch": 1.453930532418823,
+        "yaw": 5.491927054455765,
+        "height": 3.8168764772039028,
+        "x": 8.959093353984247,
+        "y": 8.502003384466985
+      }
+    }
+  ],
+  "search_bounds": {
+    "roll": [
+      [
+        3.0,
+        14.0
+      ],
+      [
+        0.0,
+        0.2
+      ],
+      [
+        2.0,
+        10.0
+      ]
+    ],
+    "pitch": [
+      [
+        3.0,
+        14.0
+      ],
+      [
+        0.0,
+        0.2
+      ],
+      [
+        2.0,
+        10.0
+      ]
+    ],
+    "yaw": [
+      [
+        8.0,
+        24.0
+      ],
+      [
+        0.0,
+        0.2
+      ],
+      [
+        5.0,
+        22.0
+      ]
+    ],
+    "height": [
+      [
+        20.0,
+        50.0
+      ],
+      [
+        0.0,
+        2.0
+      ],
+      [
+        25.0,
+        65.0
+      ]
+    ],
+    "x": [
+      [
+        0.002,
+        0.06
+      ],
+      [
+        0.0,
+        0.01
+      ],
+      [
+        0.01,
+        0.18
+      ]
+    ],
+    "y": [
+      [
+        0.002,
+        0.06
+      ],
+      [
+        0.0,
+        0.01
+      ],
+      [
+        0.01,
+        0.18
+      ]
+    ]
+  },
+  "parameters": {
+    "KP": 211.09205955,
+    "KI": 0.223363309,
+    "KD": 93.863981577,
+    "ROLL_GAINS": [
+      50.67943313,
+      0.026414318,
+      14.574450033
+    ],
+    "PITCH_GAINS": [
+      50.571938943,
+      0.0608505,
+      14.3523899
+    ],
+    "YAW_GAINS": [
+      37.650316822,
+      0.048992121,
+      34.05348635
+    ],
+    "X_POSITION_GAINS": [
+      0.301072977,
+      0.000751421,
+      0.297699224
+    ],
+    "Y_POSITION_GAINS": [
+      0.303979658,
+      0.004076894,
+      0.309451213
+    ],
+    "TOTAL_MASS": 1.0,
+    "ARM_LENGTH": 0.2,
+    "MAX_THRUST_PER_MOTOR": 10.0,
+    "MOMENT_OF_INERTIA": [
+      0.005,
+      0.005,
+      0.009
+    ],
+    "THRUST_COEFFICIENT": 1e-05,
+    "TORQUE_COEFFICIENT": 2e-07,
+    "GRAVITY": 9.81,
+    "MAX_ORIENTATION_CORRECTION": 20.0,
+    "MAX_TILT_DEGREES": 15.0,
+    "MAX_TILT_RATE_DEGREES": 10.0,
+    "TILT_SMOOTHING_TIME": 0.03,
+    "GROUND_HEIGHT": 0.0,
+    "MINIMUM_CLEARANCE": 2.0,
+    "WAYPOINT_SPACING": 1.0,
+    "ASTAR_GRID_RESOLUTION": 1.0,
+    "ASTAR_SEARCH_MARGIN": 5.0,
+    "ASTAR_CLIMB_WEIGHT": 2.0,
+    "ASTAR_MAXIMUM_ALTITUDE": null,
+    "ASTAR_CLEARANCE_MARGIN": 0.25,
+    "MAX_FLIGHT_SPEED": 1.2,
+    "MAX_FLIGHT_ACCELERATION": 0.8,
+    "MAX_FLIGHT_JERK": 1.0,
+    "MAX_CLIMB_RATE": 0.8,
+    "MAX_DESCENT_RATE": 0.4,
+    "PATH_LOOKAHEAD_DISTANCE": 1.0,
+    "ARRIVAL_TOLERANCE": 0.2,
+    "SPEED_TOLERANCE": 0.15,
+    "INCLUDE_LANDING": true,
+    "LANDING_DESCENT_SPEED": 0.4,
+    "LANDING_FLARE_SPEED": 0.12,
+    "LANDING_FLARE_HEIGHT": 0.8,
+    "LANDING_APPROACH_GAIN": 0.5,
+    "LANDING_TOUCHDOWN_SPEED": 0.02,
+    "MAX_LANDING_SLOPE_DEGREES": 20.0,
+    "LANDING_SEARCH_RADIUS": 3.0,
+    "LANDING_SEARCH_RESOLUTION": 0.25,
+    "LANDING_MAX_ACCELERATION": 0.3,
+    "LANDING_MAX_JERK": 0.5,
+    "TERRAIN_SEED": 17,
+    "TERRAIN_BOUNDS": [
+      -100.0,
+      100.0,
+      -100.0,
+      100.0
+    ],
+    "LANDSCAPE_HEIGHT": 18.0,
+    "LANDSCAPE_FEATURE_SIZE": 60.0,
+    "LANDSCAPE_OCTAVES": 4,
+    "LANDSCAPE_PERSISTENCE": 0.3,
+    "LANDSCAPE_LACUNARITY": 2.0,
+    "LANDSCAPE_RESOLUTION": 1.0,
+    "HILL_CENTER": [
+      5.0,
+      4.0
+    ],
+    "HILL_HEIGHT": 10,
+    "HILL_WIDTH": 1.6,
+    "TERRAIN_SLOPE": [
+      0.1,
+      0.0
+    ],
+    "WIND_VELOCITY": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "WIND_FORCE_COEFFICIENT": 0.2,
+    "GUST_START": 10.0,
+    "GUST_DURATION": 2.0,
+    "GUST_PERIOD": 6.0,
+    "DT": 0.005,
+    "SIMULATION_TIME": 40.0,
+    "ARRIVAL_WAIT_TIME": 1.5,
+    "GYM_BODY_RADIUS": 0.08,
+    "GYM_BODY_HEIGHT": 0.04,
+    "GYM_PHYSICS_SUBSTEPS": 1,
+    "GYM_TERRAIN_BOUNDS": [
+      -100.0,
+      100.0,
+      -100.0,
+      100.0
+    ],
+    "GYM_TERRAIN_RESOLUTION": 0.5,
+    "MAX_MOTOR_SPEED": 999.9999999999999,
+    "HOVER_SPEED": 495.22722057657535
+  },
+  "score_weights": {
+    "tracking_rmse_squared": 15,
+    "final_error_squared": 120,
+    "overshoot_squared": 20,
+    "settling_seconds": 0.1,
+    "saturation_fraction": 50,
+    "normalized_motor_slew_squared": 0.05,
+    "impact_above_0_15_m_s_squared": 200,
+    "incomplete_or_failed_mission": 10000
+  },
+  "scope": "Recommendations only; held-out validation never guides search. No global optimality claim."
+}
