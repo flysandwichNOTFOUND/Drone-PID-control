@@ -74,6 +74,13 @@ overshoot, settling, saturation, smoothness, touchdown speed and success.
 Recommendations go to `outputs/optimized_pid_gains.json`; standard tuning does
 not change `parameters.py`. The latest accepted gains have been applied.
 
+## Acknowledgments
+
+The Gym backend uses [gym-pybullet-drones](https://github.com/learnsyslab/gym-pybullet-drones)
+by Jacopo Panerati and contributors ([MIT license](https://github.com/learnsyslab/gym-pybullet-drones/blob/a8c238c21c7586ee1735bafb358a4d5637402f14/LICENSE)),
+built on [PyBullet/Bullet Physics](https://github.com/bulletphysics/bullet3)
+([zlib license](https://github.com/bulletphysics/bullet3/blob/master/LICENSE.txt)).
+
 ## Future work
 
 1. **Fix contact filtering and regenerate data.** Detect positive contact force
