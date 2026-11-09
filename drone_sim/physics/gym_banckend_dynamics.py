@@ -7,10 +7,11 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
+from drone_sim.physics.aerodynamics import RotorAerodynamics
 from drone_sim.physics.dynamics import DroneState
 from drone_sim.configuration.project_paths import OUTPUT_DIRECTORY
 from drone_sim.validation import positive, vector
-from drone_sim.world.terrain import FlatTerrain
+from drone_sim.world.collision import CollisionBody, CollisionSurface
 
 
 @contextmanager
@@ -55,17 +56,31 @@ class GymPyBulletDrone:
     # INITIALIZATION
     # ============================================================
 
-    def __init__(self, config, terrain, gui = False):
+    def __init__(self, config, terrain, gui = False, parameter_overrides = None, randomize = False, seed = None):
         """Input: parameter module, terrain object, GUI flag. Output: backend.
 
         Source: main.create_drone() supplies parameters.py and create_terrain().
-        Caller: main.create_drone(); future comparison runner.
+        Caller: main.create_drone(); comparison runner.
+        parameter_overrides: values that replace config entries for this drone
+        only (e.g. a mass or inertia guess). randomize: draw a new "true" drone
+        from PYBULLET_PARAMETER_RANGES (seeded by seed); explicit overrides win.
+        The values actually used are kept in self.parameter_overrides and
+        self.randomization_seed. The custom model is never affected.
         Calls the setup helpers below; closes owned resources if setup fails.
         """
 
+        from drone_sim.physics.randomization import config_with, sample_pybullet_parameters
+
         self.env = None
         self._model_directory = None
-        self.config = config
+        overrides, self.randomization_seed = ({}, None)
+
+        if randomize:
+            overrides, self.randomization_seed = sample_pybullet_parameters(seed, base = config)
+
+        overrides.update(parameter_overrides or {})
+        self.parameter_overrides = overrides
+        self.config = config_with(overrides, base = config)
         self.terrain = terrain
         self.gui = bool(gui)
 
@@ -111,32 +126,20 @@ class GymPyBulletDrone:
         self.torque_coe = positive(c.TORQUE_COEFFICIENT, "Torque coefficient", allow_zero = True)
         self.dt = positive(c.DT, "Time step")
 
-        self.body_radius = positive(c.GYM_BODY_RADIUS, "Body collision radius")
-        self.body_height = positive(c.GYM_BODY_HEIGHT, "Body collision height")
-        self.terrain_resolution = positive(c.GYM_TERRAIN_RESOLUTION, "Terrain resolution")
-        self.terrain_bounds = vector(c.GYM_TERRAIN_BOUNDS, 4, "Terrain bounds").copy()
-        xmin, xmax, ymin, ymax = self.terrain_bounds
+        # Shared with the custom model, so both collide identical shapes.
+        self.collision_body = CollisionBody(c.COLLISION_BODY_RADIUS, c.COLLISION_BODY_HEIGHT)
+        self.body_radius, self.body_height = self.collision_body.radius, self.collision_body.height
+        xmin, xmax, ymin, ymax = vector(c.COLLISION_MESH_BOUNDS, 4, "Collision mesh bounds")
 
         if not (xmin < 0 < xmax and ymin < 0 < ymax):
             raise ValueError("Terrain bounds must enclose the starting XY position (0, 0).")
 
-        nx = int(np.ceil((xmax - xmin) / self.terrain_resolution)) + 1
-        ny = int(np.ceil((ymax - ymin) / self.terrain_resolution)) + 1
-
-        if nx * ny > 250000:
-            raise ValueError("Terrain mesh exceeds 250000 vertices; increase resolution spacing.")
-
-        self._terrain_shape = (nx, ny)
-
-        if not callable(getattr(self.terrain, "height", None)):
-            raise ValueError("Terrain must provide height(x, y).")
-
-        ground = float(self.terrain.height(0.0, 0.0))
-
-        if not np.isfinite(ground):
-            raise ValueError("Starting terrain height must be finite.")
-
-        self.initial_position = np.array([0.0, 0.0, ground + self.body_height / 2 + 0.01])
+        self.collision_surface = CollisionSurface(self.terrain, c.COLLISION_MESH_BOUNDS, c.COLLISION_MESH_RESOLUTION)
+        self.contact_friction = positive(c.CONTACT_FRICTION, "Contact friction", allow_zero = True)
+        self.contact_tolerance = positive(c.CONTACT_DISTANCE_TOLERANCE, "Contact distance tolerance", allow_zero = True)
+        self.initial_position = np.array([0.0, 0.0, self.resting_height(0.0, 0.0)])
+        self.aerodynamics = RotorAerodynamics(c, self.arm_len, self.thrust_coe)
+        self.max_rotor_speed = np.sqrt(self.max_thrust_per_motor / self.thrust_coe)
 
 
     def _configure_timing(self):
@@ -158,6 +161,7 @@ class GymPyBulletDrone:
 
         self.control_frequency = int(round(frequency))
         self.physics_frequency = self.control_frequency * int(substeps)
+        self.substep_dt = 1.0 / self.physics_frequency
 
 
     def _load_dependencies(self):
@@ -177,7 +181,10 @@ class GymPyBulletDrone:
         self._p = pybullet
         self._aviary_class = CtrlAviary
         self._drone_model = DroneModel.CF2P
-        self._physics = Physics.PYB  # No uncalibrated Crazyflie aerodynamic coefficients.
+        # Plain rigid-body thrust from the library. Lag, ground effect and drag
+        # come from RotorAerodynamics: the library versions use absolute height
+        # (wrong over terrain), Crazyflie coefficients, and multi-drone downwash.
+        self._physics = Physics.PYB
 
 
     # ============================================================
@@ -256,7 +263,9 @@ class GymPyBulletDrone:
         p.removeBody(old_body, physicsClientId = self.client_id)
         env.DRONE_IDS[0] = self.body_id
 
-        p.changeDynamics(self.body_id, -1, linearDamping = 0, angularDamping = 0, physicsClientId = self.client_id)
+        p.changeDynamics(self.body_id, -1, linearDamping = 0, angularDamping = 0,
+                         lateralFriction = self.contact_friction, spinningFriction = 0, rollingFriction = 0,
+                         restitution = 0, physicsClientId = self.client_id)
 
         env.M, env.L, env.G = self.total_mass, self.arm_len, self.gravity
         env.J = np.diag(self.moi)
@@ -288,7 +297,8 @@ class GymPyBulletDrone:
         # Motor links already match project order (+X, +Y, -X, -Y).
         # Stock CF2P yaw signs oppose our dynamics.py convention.
         self.yaw_torque_sign = -1
-        self._motor_speeds = np.zeros(4)
+        self._motor_speeds = np.zeros(4)   # clipped command, rad/s
+        self._rotor_speeds = np.zeros(4)   # actual lagged rotor speeds, rad/s
         self._contact_velocity = None
 
 
@@ -300,50 +310,35 @@ class GymPyBulletDrone:
         """Input: shared terrain/bounds. Output: self.terrain_body_id in physics.
 
         Source: main.create_terrain() and configuration. Caller: __init__.
-        Flat ground is exact; other surfaces use a finite triangle mesh whose
-        heights approximate the analytical surface between sampled vertices.
+        Flat ground is an exact plane; other surfaces load the shared
+        CollisionSurface mesh, which the custom model also collides with.
         """
 
         p = self._p
         p.removeBody(self.env.PLANE_ID, physicsClientId = self.client_id)
 
-        if type(self.terrain) is FlatTerrain:
+        surface = self.collision_surface
+
+        if surface.is_plane:
             shape = p.createCollisionShape(p.GEOM_PLANE, physicsClientId = self.client_id)
-            origin = [0, 0, float(self.terrain.height(0, 0))]
+            origin = [0, 0, surface.base_height]
         else:
-            xmin, xmax, ymin, ymax = self.terrain_bounds
-            nx, ny = self._terrain_shape
-            x, y = np.meshgrid(np.linspace(xmin, xmax, nx), np.linspace(ymin, ymax, ny))
-            z = np.asarray(self.terrain.height(x, y), dtype = float)
-
-            if z.shape != x.shape or not np.all(np.isfinite(z)):
-                raise ValueError("Terrain must return finite heights for the mesh grid.")
-
-            vertices = np.column_stack((x.ravel(), y.ravel(), z.ravel()))
-            indices = []
-
-            for row in range(ny - 1):
-                for col in range(nx - 1):
-                    a = row * nx + col
-                    indices.extend([a, a + 1, a + nx, a + 1, a + nx + 1, a + nx])
-
+            vertices, faces = surface.mesh()
             # Large inline vertex buffers exceed PyBullet's command capacity.
             # Load an OBJ from our owned temporary directory instead.
             mesh_path = Path(self._model_directory.name) / "terrain.obj"
 
             with mesh_path.open("w", encoding = "utf-8") as mesh:
-                for vx, vy, vz in vertices:
-                    mesh.write(f"v {vx} {vy} {vz}\n")
-
-                for index in range(0, len(indices), 3):
-                    a, b, c = indices[index:index + 3]
-                    mesh.write(f"f {a + 1} {b + 1} {c + 1}\n")
+                mesh.write("".join(f"v {vx!r} {vy!r} {vz!r}\n" for vx, vy, vz in vertices.tolist()))
+                mesh.write("".join(f"f {a} {b} {c}\n" for a, b, c in (faces + 1).tolist()))
 
             shape = p.createCollisionShape(p.GEOM_MESH, fileName = str(mesh_path), flags = p.GEOM_FORCE_CONCAVE_TRIMESH, physicsClientId = self.client_id)
             origin = [0, 0, 0]
 
         self.terrain_body_id = p.createMultiBody(baseMass = 0, baseCollisionShapeIndex = shape, basePosition = origin, physicsClientId = self.client_id)
 
+        # PyBullet multiplies the two friction values, so the ground uses 1.
+        p.changeDynamics(self.terrain_body_id, -1, lateralFriction = 1.0, restitution = 0, physicsClientId = self.client_id)
         self.env.PLANE_ID = self.terrain_body_id
 
 
@@ -376,7 +371,8 @@ class GymPyBulletDrone:
         p.resetBasePositionAndOrientation(self.body_id, position.tolist(), quaternion, physicsClientId = self.client_id)
         p.resetBaseVelocity(self.body_id, linearVelocity = velocity.tolist(), angularVelocity = (rotation @ angular_velocity).tolist(), physicsClientId = self.client_id)
 
-        self._motor_speeds = np.minimum(speeds, np.sqrt(self.max_thrust_per_motor / self.thrust_coe))
+        self._motor_speeds = np.minimum(speeds, self.max_rotor_speed)
+        self._rotor_speeds = self._motor_speeds.copy()  # start in steady state
         self._contact_velocity = None
         env.step_counter = 0
         env.last_clipped_action = (self._motor_speeds * 60 / (2 * np.pi)).reshape(1, 4)
@@ -393,22 +389,29 @@ class GymPyBulletDrone:
         """
 
         coordinates = vector([x, y], 2, "Ground coordinates")
-        height = float(self.terrain.height(*coordinates))
-
-        if not np.isfinite(height):
-            raise ValueError("Terrain height must be finite.")
-
-        return height
+        return float(self.collision_surface.height(*coordinates))
 
 
-    def update_state(self, state: DroneState, dt, external_force = None):
-        """Input: mutable state, seconds, optional world force in newtons.
+    def resting_height(self, x, y):
+        """Centre-of-mass height of a level drone sitting on the ground at (x, y)."""
+
+        return self.collision_body.resting_height(self.collision_surface, x, y)
+
+
+    def bottom_clearance(self, state):
+
+        return self.collision_body.clearance(self.collision_surface, state.position, state.orientation)
+
+
+    def update_state(self, state: DroneState, dt, external_force = None, wind_velocity = None):
+        """Input: mutable state, seconds, optional world force (N) and wind (m/s).
 
         Output: None; update the supplied DroneState in place after stepping.
-        Source: state.motor_speeds (rad/s) from PID; wind force from environment.
-        Caller: main.control_step(); future same-command comparison loop.
-        Motor links use project order. Convert rad/s to RPM, apply wind and
-        the yaw correction on every physics substep, then call read_state().
+        Source: state.motor_speeds (rad/s) from PID; wind from environment.
+        Caller: main.control_step().
+        Every physics substep: rotor speeds lag toward the command, thrust and
+        yaw torque use those actual speeds, then ground effect, rotor/body drag
+        and the external force are applied. read_state() fills the result.
         """
 
         if self.env is None:
@@ -421,31 +424,47 @@ class GymPyBulletDrone:
 
         speeds = vector(state.motor_speeds, 4, "Motor speeds")
         force = np.zeros(3) if external_force is None else vector(external_force, 3, "External force")
+        wind = np.zeros(3) if wind_velocity is None else vector(wind_velocity, 3, "Wind velocity")
 
         if np.any(speeds < 0):
             raise ValueError("Motor speeds must be nonnegative.")
 
-        self._motor_speeds = np.minimum(speeds, np.sqrt(self.max_thrust_per_motor / self.thrust_coe))
+        self._motor_speeds = np.minimum(speeds, self.max_rotor_speed)
         rpm = (self._motor_speeds * 60 / (2 * np.pi)).reshape(1, 4)
+        aero, surface = self.aerodynamics, self.collision_surface
         p, env = self._p, self.env
         original_physics = env._physics
-        impact_speed = 0.0
+        impact_speed, peak_force, touched = 0.0, 0.0, False
         substep_started = False
 
         def physics_with_external_forces(motor_rpm, nth_drone):
-            nonlocal impact_speed, substep_started
-            # CtrlAviary calls this once before each PyBullet substep.
+            nonlocal impact_speed, peak_force, touched, substep_started
+            # CtrlAviary calls this once before each PyBullet substep;
+            # record contact from the substep that just finished.
             if substep_started:
                 self.read_state(state)
                 impact_speed = max(impact_speed, state.contact_speed)
+                peak_force = max(peak_force, state.contact_force)
+                touched = touched or state.ground_contact
 
             substep_started = True
             self._contact_velocity = p.getBaseVelocity(self.body_id, physicsClientId = self.client_id)
-            original_physics(motor_rpm, nth_drone)
-            position = p.getBasePositionAndOrientation(self.body_id, physicsClientId = self.client_id)[0]
-            p.applyExternalForce(self.body_id, -1, force.tolist(), position, p.WORLD_FRAME, physicsClientId = self.client_id)
+            position, quaternion = p.getBasePositionAndOrientation(self.body_id, physicsClientId = self.client_id)
+            rotation = np.asarray(p.getMatrixFromQuaternion(quaternion)).reshape(3, 3)
 
-            desired_yaw = self.torque_coe * np.dot(self._motor_speeds**2, [1, -1, 1, -1])
+            # Rotors lag the command; thrust and yaw torque use the actual speeds.
+            self._rotor_speeds = aero.spin(self._rotor_speeds, self._motor_speeds, self.substep_dt)
+            original_physics(self._rotor_speeds * 60 / (2 * np.pi), nth_drone)
+
+            thrusts = self.thrust_coe * self._rotor_speeds**2
+            boost = thrusts * aero.ground_effect_gain(aero.rotor_heights(position, rotation, surface))
+            for rotor in np.flatnonzero(boost > 0):
+                p.applyExternalForce(self.body_id, int(rotor), [0, 0, float(boost[rotor])], [0, 0, 0], p.LINK_FRAME, physicsClientId = self.client_id)
+
+            drag = aero.drag_force(rotation, self._contact_velocity[0], wind, self._rotor_speeds)
+            p.applyExternalForce(self.body_id, -1, (force + drag).tolist(), position, p.WORLD_FRAME, physicsClientId = self.client_id)
+
+            desired_yaw = self.torque_coe * np.dot(self._rotor_speeds**2, [1, -1, 1, -1])
             correction = (1 - self.yaw_torque_sign) * desired_yaw
             p.applyExternalTorque(self.body_id, -1, [0, 0, correction], p.LINK_FRAME, physicsClientId = self.client_id)
 
@@ -464,6 +483,8 @@ class GymPyBulletDrone:
 
         self.read_state(state)
         state.contact_speed = max(impact_speed, state.contact_speed)
+        state.contact_force = max(peak_force, state.contact_force)
+        state.ground_contact = touched or state.ground_contact
 
 
     def read_state(self, state: DroneState):
@@ -473,6 +494,7 @@ class GymPyBulletDrone:
         Caller: update_state() and reset() inside this adapter.
         Position/velocity in world frame, Euler angles in radians,
         angular velocity in body frame, motor speeds in rad/s, contact fields.
+        motor_speeds holds the clipped command; rotor_speeds the lagged actual.
         """
 
         if self.env is None:
@@ -488,10 +510,14 @@ class GymPyBulletDrone:
         state.orientation = np.asarray(p.getEulerFromQuaternion(quaternion), dtype = float)
         state.angular_velocity = rotation.T @ np.asarray(angular_velocity)
         state.motor_speeds = self._motor_speeds.copy()
+        state.rotor_speeds = self._rotor_speeds.copy()
 
+        # Touching = the solver pushed back (normal force > 0) or the gap is
+        # within tolerance. Speculative points further away are ignored.
         contacts = p.getContactPoints(bodyA = self.body_id, bodyB = self.terrain_body_id, physicsClientId = self.client_id)
-        contacts = [contact for contact in contacts if contact[8] <= 0]
+        contacts = [contact for contact in contacts if contact[9] > 0 or contact[8] <= self.contact_tolerance]
         state.ground_contact = bool(contacts)
+        state.contact_force = float(sum(max(contact[9], 0.0) for contact in contacts))
         state.contact_speed = 0.0
 
         # Use velocity before the last solver step so an impact is not hidden

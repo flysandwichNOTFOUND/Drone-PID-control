@@ -6,6 +6,19 @@ def wrap_angle(angle):
     return (angle + np.pi) % (2.0 * np.pi) - np.pi
 
 
+def rotation_matrix(orientation):
+    """Body-to-world rotation for roll, pitch, yaw (Z-Y-X, same as PyBullet)."""
+
+    roll, pitch, yaw = orientation
+    cr, sr = np.cos(roll), np.sin(roll)
+    cp, sp = np.cos(pitch), np.sin(pitch)
+    cy, sy = np.cos(yaw), np.sin(yaw)
+
+    return np.array([[cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+                     [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+                     [-sp, cp * sr, cp * cr]])
+
+
 def euler_rates(orientation, body_rates):
 
     roll, pitch, _ = orientation

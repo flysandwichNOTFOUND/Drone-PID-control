@@ -52,10 +52,12 @@ def create_terrain():
     raise ValueError("TERRAIN_MODE must be flat, hill, slope, or landscape.")
 
 
-def create_drone(terrain = None, physics_backend = None):
+def create_drone(terrain = None, physics_backend = None, pybullet_parameters = None):
     """Input: optional terrain. Output: selected physics backend.
 
     Source: PHYSICS_BACKEND above and drone properties in parameters.py.
+    pybullet_parameters: optional overrides (e.g. a randomized drone) used
+    only by the Gym backend; the custom model always uses parameters.py.
     Caller: run_simulation(), tuning tools, and tests.
     """
 
@@ -66,9 +68,8 @@ def create_drone(terrain = None, physics_backend = None):
 
     if physics_backend == "gym_pybullet":
         from drone_sim.physics.gym_banckend_dynamics import GymPyBulletDrone
-
         return GymPyBulletDrone(
-            config = parameters,
+            config = parameters, parameter_overrides = pybullet_parameters,
             terrain = create_terrain() if terrain is None else terrain)
 
     return Drone(parameters.TOTAL_MASS, parameters.ARM_LENGTH, parameters.MAX_THRUST_PER_MOTOR,
@@ -98,8 +99,14 @@ def create_environment():
 
 def control_step(drone, state, controllers, environment, target_height,
                  target_position, target_yaw, dt, current_time,
-                 fixed_orientation = None, disarmed = False, target_vertical_velocity = 0.0, target_horizontal_velocity = None, step_observer = None):
-    """Shared control/physics step used by the mission and PID trials."""
+                 fixed_orientation = None, disarmed = False, target_vertical_velocity = 0.0, target_horizontal_velocity = None, step_observer = None,
+                 thrust_scale = 1.0):
+    """Shared control/physics step used by the mission and PID trials.
+
+    thrust_scale (0 to 1) multiplies the collective thrust; landing uses it to
+    spool the motors down smoothly once the drone is on the ground. Attitude
+    corrections are added afterwards, so the drone keeps control of its tilt.
+    """
 
     height, orientation, position = controllers
 
@@ -113,10 +120,12 @@ def control_step(drone, state, controllers, environment, target_height,
 
     factor = max(np.cos(state.orientation[0]) * np.cos(state.orientation[1]), 0.5)
 
-    state.motor_speeds = orientation.calculate_motor_speed(base / np.sqrt(factor), target_orientation, state, dt)
+    collective = base / np.sqrt(factor) * np.sqrt(np.clip(thrust_scale, 0.0, 1.0))  # thrust grows with speed squared
+    state.motor_speeds = orientation.calculate_motor_speed(collective, target_orientation, state, dt)
     force = environment.calculate_wind_force(state, current_time)
+    wind = environment.wind_velocity_at_time(current_time)
     before = state.copy() if step_observer is not None else None
-    drone.update_state(state, dt, external_force = force)
+    drone.update_state(state, dt, external_force = force, wind_velocity = wind)
 
     values = np.concatenate([state.position, state.velocity, state.orientation, state.angular_velocity, state.motor_speeds])
 
@@ -124,13 +133,14 @@ def control_step(drone, state, controllers, environment, target_height,
         raise FloatingPointError("Simulation became unstable.")
 
     if step_observer is not None:
-        step_observer(before, state, dt, force, current_time)
+        step_observer(before, state, dt, force, current_time, wind)
 
     return target_orientation
 
 
 def run_simulation(gains = None, duration = None, include_landing = None, verbose = True,
-                   target_yaw = None, terrain = None, goal_position = None, physics_backend = None, initial_state = None, environment = None, step_observer = None):
+                   target_yaw = None, terrain = None, goal_position = None, physics_backend = None, initial_state = None, environment = None, step_observer = None,
+                   pybullet_parameters = None):
     """Run one mission, or return (final_states, comparison_data) in compare mode.
 
     Each invocation creates fresh controllers, navigation, wind and histories.
@@ -147,11 +157,12 @@ def run_simulation(gains = None, duration = None, include_landing = None, verbos
         comparison_data = run_comparison(
             duration = duration, gains = gains, include_landing = include_landing,
             verbose = verbose, target_yaw = target_yaw, terrain = terrain,
-            goal_position = goal_position, initial_state = initial_state, environment = environment)
+            goal_position = goal_position, initial_state = initial_state, environment = environment,
+            pybullet_parameters = pybullet_parameters)
         return comparison_data["final_states"], comparison_data
 
     terrain = create_terrain() if terrain is None else terrain
-    drone = create_drone(terrain, physics_backend = physics_backend)
+    drone = create_drone(terrain, physics_backend = physics_backend, pybullet_parameters = pybullet_parameters)
 
     try:
         return _run_mission(drone, physics_backend, gains, duration, include_landing, verbose, target_yaw, terrain, goal_position, initial_state, environment, step_observer)
@@ -184,16 +195,14 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
     state = DroneState() if initial_state is None else initial_state.copy()
 
     if initial_state is None:
-        state.position[2] = drone.get_ground_height(*state.position[:2])
-
-        if physics_backend == "gym_pybullet":
-            state.position[:] = drone.initial_position
+        # Both backends start level and resting on the shared ground shape.
+        state.position[2] = drone.resting_height(*state.position[:2])
 
     if physics_backend == "gym_pybullet":
         drone.reset(state)
 
     landing_controller = (LandingController(
-        terrain, goal[:2], parameters.LANDING_DESCENT_SPEED, parameters.LANDING_FLARE_SPEED,
+        drone.collision_surface, goal[:2], parameters.LANDING_DESCENT_SPEED, parameters.LANDING_FLARE_SPEED,
         parameters.LANDING_FLARE_HEIGHT, speed_tolerance = parameters.SPEED_TOLERANCE,
         max_slope_degrees = parameters.MAX_LANDING_SLOPE_DEGREES,
         footprint_radius = parameters.ARM_LENGTH, mode = LANDING_MODE,
@@ -202,7 +211,12 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
         max_acceleration = parameters.LANDING_MAX_ACCELERATION,
         max_jerk = parameters.LANDING_MAX_JERK,
         approach_gain = parameters.LANDING_APPROACH_GAIN,
-        touchdown_speed = parameters.LANDING_TOUCHDOWN_SPEED)
+        touchdown_speed = parameters.LANDING_TOUCHDOWN_SPEED,
+        collision_body = drone.collision_body,
+        touchdown_margin = parameters.LANDING_TOUCHDOWN_MARGIN,
+        max_impact_speed = parameters.LANDING_MAX_IMPACT_SPEED,
+        spool_down_time = parameters.LANDING_SPOOL_DOWN_TIME,
+        preferred_slope_degrees = parameters.PREFERRED_LANDING_SLOPE_DEGREES)
         if include_landing else None)
 
     if landing_controller is not None:
@@ -220,6 +234,7 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
     velocity_history = []
     position_history = []
     motor_speed_history = []
+    rotor_speed_history = []
     error_history = []
     orientation_history = []
     angular_velocity_history = []
@@ -233,6 +248,7 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
     target_velocity_history = []
     velocity_vector_history = []
     contact_speed_history = []
+    contact_force_history = []
     ground_contact_history = []
     wind_force_history = []
     physics_step_history = []
@@ -322,9 +338,11 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
             drone, state, controllers, environment, commanded_target[2],
             commanded_target[:2], target_yaw, parameters.DT, current_time, disarmed = landed or failed,
             target_vertical_velocity = vertical_velocity,
-            target_horizontal_velocity = reference_velocity[:2], step_observer = step_observer)
+            target_horizontal_velocity = reference_velocity[:2], step_observer = step_observer,
+            fixed_orientation = landing_controller.touchdown_orientation(target_yaw) if landing_active else None,
+            thrust_scale = landing_controller.throttle_scale if landing_active else 1.0)
         if landing_active and not landed and not failed:
-            landed = landing_controller.check_touchdown(state)
+            landed = landing_controller.check_touchdown(state, parameters.DT)
 
             if landed:
                 navigation.advance_waypoint()
@@ -346,6 +364,7 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
         target_velocity_history.append(reference_velocity.copy())
         velocity_vector_history.append(state.velocity.copy())
         contact_speed_history.append(state.contact_speed)
+        contact_force_history.append(state.contact_force)
         ground_contact_history.append(state.ground_contact)
         flight_stage_history.append(flight_stage)
         time_history.append(recorded_time)
@@ -353,6 +372,7 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
         velocity_history.append(state.velocity[2])
         position_history.append(state.position.copy())
         motor_speed_history.append(state.motor_speeds.copy())
+        rotor_speed_history.append(state.rotor_speeds.copy())
         error_history.append(height_error)
         orientation_history.append(np.degrees(state.orientation.copy()))
         target_orientation_history.append(np.degrees(target_orientation.copy()))
@@ -385,6 +405,7 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
         "velocity": velocity_history,
         "position": position_history,
         "motor_speed": motor_speed_history,
+        "rotor_speed": rotor_speed_history,
         "error": error_history,
         "orientation": orientation_history,
         "angular_velocity": angular_velocity_history,
@@ -406,11 +427,14 @@ def _run_mission(drone, physics_backend, gains, duration, include_landing, verbo
         "target_velocity_history": target_velocity_history,
         "velocity_vector": velocity_vector_history,
         "contact_speed": contact_speed_history,
+        "contact_force": contact_force_history,
         "ground_contact": ground_contact_history,
         "external_force": wind_force_history,
         "physics_advanced": physics_step_history,
         "landing_failed": landing_controller.failed if landing_controller else False,
         "touchdown_speed": landing_controller.touchdown_speed if landing_controller else None,
+        "peak_landing_contact_force": landing_controller.peak_contact_force if landing_controller else None,
+        "landing_position_error": landing_controller.landing_position_error if landing_controller else None,
         "target_position_history": target_position_history,
         "waypoint_index": waypoint_index_history,
         "distance_to_target": distance_to_target_history,

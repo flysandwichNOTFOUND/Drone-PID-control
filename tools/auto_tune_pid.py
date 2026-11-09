@@ -103,9 +103,7 @@ def run_simulation(gains, duration, fixed_orientation = None, target_position = 
     drone = create_drone(physics_backend)
     try:
         state = DroneState()
-        state.position[2] = TARGET_HEIGHT if start_hover else drone.get_ground_height(0, 0)
-        if physics_backend == "gym_pybullet" and not start_hover:
-            state.position[:] = drone.initial_position
+        state.position[2] = TARGET_HEIGHT if start_hover else drone.resting_height(0, 0)
         if start_hover:
             state.motor_speeds.fill(HOVER_SPEED)
         if physics_backend == "gym_pybullet":

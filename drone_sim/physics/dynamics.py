@@ -1,11 +1,15 @@
 import numpy as np
-from drone_sim.physics.attitude import integrate_orientation
+from drone_sim.physics.attitude import integrate_orientation, rotation_matrix
 from drone_sim.validation import positive, vector
 from drone_sim.world.terrain import FlatTerrain
 
 class Drone:
+    CONTACT_TOLERANCE = 1e-4   # m; bottom points this close to the deepest one share the load
+    CONTACT_ITERATIONS = 10    # impulse solver passes per contact step
+
     def __init__(self, total_mass, arm_len, max_thrust_per_motor, moi, thrust_coe, torque_coe,
-                 gravity = 9.81, ground_height = 0.0, terrain = None):
+                 gravity = 9.81, ground_height = 0.0, terrain = None,
+                 collision_surface = None, collision_body = None, contact_friction = None):
 
         self.total_mass = positive(total_mass, "Total mass")
         self.gravity = -positive(abs(gravity), "Gravity")
@@ -25,9 +29,27 @@ class Drone:
 
         self.terrain = terrain if terrain is not None else FlatTerrain(self.ground_height)
 
+        # Same ground mesh and body cylinder as the PyBullet backend.
+        from drone_sim.world import collision
+        from drone_sim.configuration import parameters
+
+        self.collision_surface = collision.collision_surface(self.terrain) if collision_surface is None else collision_surface
+        self.collision_body = collision.collision_body() if collision_body is None else collision_body
+        friction = parameters.CONTACT_FRICTION if contact_friction is None else contact_friction
+        self.contact_friction = positive(friction, "Contact friction", allow_zero = True)
+
     def get_ground_height(self, x, y):
 
-        return float(self.terrain.height(x, y))
+        return float(self.collision_surface.height(x, y))
+
+    def resting_height(self, x, y):
+        """Centre-of-mass height of a level drone sitting on the ground at (x, y)."""
+
+        return self.collision_body.resting_height(self.collision_surface, x, y)
+
+    def bottom_clearance(self, state):
+
+        return self.collision_body.clearance(self.collision_surface, state.position, state.orientation)
 
     def motor_thrusts(self, state):
 
@@ -64,10 +86,6 @@ class Drone:
 
     def net_force(self, state, external_force = None): #explain
 
-        roll = state.orientation[0]
-        pitch = state.orientation[1]
-        yaw = state.orientation[2]
-
         if external_force is None:
             external_force = np.zeros(3, dtype = float)
         else:
@@ -76,23 +94,11 @@ class Drone:
         if external_force.shape != (3,):
             raise ValueError("External force must be a three-element vector.")
 
-        R_roll = np.array([[1, 0, 0],
-                           [0, np.cos(roll), -np.sin(roll)],
-                           [0, np.sin(roll), np.cos(roll)]])
-
-        R_pitch = np.array([[np.cos(pitch), 0, np.sin(pitch)],
-                            [0, 1, 0],
-                            [-np.sin(pitch), 0, np.cos(pitch)]])
-
-        R_yaw = np.array([[np.cos(yaw), -np.sin(yaw), 0],
-                          [np.sin(yaw), np.cos(yaw), 0],
-                          [0, 0, 1]])
-
-        rotation_matrix = R_yaw @ R_pitch @ R_roll
+        rotation = rotation_matrix(state.orientation)
 
         body_thrust = np.sum(self.thrusts_force(state), axis = 0)
 
-        world_thrust = rotation_matrix @ body_thrust
+        world_thrust = rotation @ body_thrust
 
         net_force = world_thrust + self.gravity_force() + external_force
 
@@ -131,9 +137,13 @@ class Drone:
 
         return (torque - gyroscopic_term) / self.moi
 
-    def update_state(self, state, dt, external_force = None):
+    def update_state(self, state, dt, external_force = None, wind_velocity = None):
+        """Advance one step. Rotors reach their command instantly and there is
+        no rotor/body drag or ground effect; wind_velocity is accepted for a
+        common interface but only external_force acts here."""
 
         dt = positive(dt, "Time step")
+        state.rotor_speeds = np.minimum(vector(state.motor_speeds, 4, "Motor speeds"), np.sqrt(self.max_thrust_per_motor / self.thrust_coe))
 
         linear_acceleration = self.linear_acceleration(state, external_force = external_force)
         angular_acceleration = self.angular_acceleration(state)
@@ -143,18 +153,79 @@ class Drone:
 
         state.position += state.velocity * dt
         state.orientation[:] = integrate_orientation(state.orientation, state.angular_velocity, dt)
-        ground = self.get_ground_height(*state.position[:2])
-        state.ground_contact = state.position[2] <= ground
+        self.resolve_ground_contact(state, dt)
+
+    def resolve_ground_contact(self, state, dt):
+        """Rigid, non-bouncing contact between the body cylinder and the ground.
+
+        If the bottom disk overlaps the ground, lift the body until its
+        deepest point just touches. Every bottom point within CONTACT_TOLERANCE
+        of the ground then shares inelastic impulses (normal plus Coulomb
+        friction), solved iteratively like PyBullet's contact solver. Impulses
+        change linear and angular velocity, so a body touching a slope with
+        one edge tips onto it. contact_speed is the fastest closing speed of a
+        contact point; contact_force is the total normal impulse divided by dt.
+        """
+
+        body, surface = self.collision_body, self.collision_surface
+        points = body.bottom_points(state.position, state.orientation)
+        gaps = points[:, 2] - surface.height(points[:, 0], points[:, 1])
+        deepest = float(np.min(gaps))
+
+        state.ground_contact = bool(deepest <= 0.0)
         state.contact_speed = 0.0
+        state.contact_force = 0.0
 
-        if state.ground_contact:
-            state.position[2] = ground
-            normal = self.terrain.normal(*state.position[:2])
-            normal_speed = np.dot(state.velocity, normal)
-            state.contact_speed = max(-normal_speed, 0.0)
+        if not state.ground_contact:
+            return
 
-            if normal_speed < 0:
-                state.velocity -= normal_speed * normal
+        state.position[2] -= deepest
+        touching = np.flatnonzero(gaps - deepest <= self.CONTACT_TOLERANCE)
+        rotation = rotation_matrix(state.orientation)
+        inverse_inertia = rotation @ np.diag(1.0 / self.moi) @ rotation.T
+        omega = rotation @ state.angular_velocity
+        velocity = state.velocity.copy()
+
+        def inverse_mass(offset, direction):
+            return 1.0 / self.total_mass + float(np.dot(direction, np.cross(inverse_inertia @ np.cross(offset, direction), offset)))
+
+        contacts = []
+        for index in touching:
+            offset = rotation @ body.bottom_body[index]
+            normal = surface.normal(*points[index, :2])
+            tangent = np.cross(normal, [1.0, 0.0, 0.0] if abs(normal[0]) < 0.9 else [0.0, 1.0, 0.0])
+            tangent /= np.linalg.norm(tangent)
+            directions = (normal, tangent, np.cross(normal, tangent))
+            closing = -float(np.dot(velocity + np.cross(omega, offset), normal))
+            state.contact_speed = max(state.contact_speed, closing)
+            contacts.append([offset, directions, [inverse_mass(offset, d) for d in directions], 0.0, np.zeros(2)])
+
+        def apply(offset, impulse):
+            nonlocal velocity, omega
+            velocity = velocity + impulse / self.total_mass
+            omega = omega + inverse_inertia @ np.cross(offset, impulse)
+
+        for _ in range(self.CONTACT_ITERATIONS):
+            for contact in contacts:
+                offset, (normal, t1, t2), (k_normal, k_t1, k_t2), total_normal, total_friction = contact
+                point_velocity = velocity + np.cross(omega, offset)
+                new_normal = max(total_normal - float(np.dot(point_velocity, normal)) / k_normal, 0.0)
+                apply(offset, (new_normal - total_normal) * normal)
+                contact[3] = new_normal
+
+                point_velocity = velocity + np.cross(omega, offset)
+                new_friction = total_friction - np.array([np.dot(point_velocity, t1) / k_t1, np.dot(point_velocity, t2) / k_t2])
+                limit = self.contact_friction * new_normal
+                size = float(np.linalg.norm(new_friction))
+                if size > limit:
+                    new_friction *= limit / size
+                change = new_friction - total_friction
+                apply(offset, change[0] * t1 + change[1] * t2)
+                contact[4] = new_friction
+
+        state.velocity = velocity
+        state.angular_velocity = rotation.T @ omega
+        state.contact_force = sum(contact[3] for contact in contacts) / dt
 
 
 class DroneState:
@@ -168,9 +239,11 @@ class DroneState:
 
         self.angular_velocity = np.array([0, 0, 0], dtype = float)  # p, q, r
 
-        self.motor_speeds = np.array([0, 0, 0, 0], dtype = float)      # w1, w2, w3, w4
+        self.motor_speeds = np.array([0, 0, 0, 0], dtype = float)      # w1, w2, w3, w4 commanded (rad/s)
+        self.rotor_speeds = np.zeros(4, dtype = float)      # actual rotor speeds (rad/s)
         self.ground_contact = False
-        self.contact_speed = 0.0
+        self.contact_speed = 0.0                            # m/s closing speed at contact
+        self.contact_force = 0.0                            # N normal force from the ground
 
     def copy(self):
 
@@ -181,8 +254,10 @@ class DroneState:
         copied_state.orientation = self.orientation.copy()
         copied_state.angular_velocity = self.angular_velocity.copy()
         copied_state.motor_speeds = self.motor_speeds.copy()
+        copied_state.rotor_speeds = self.rotor_speeds.copy()
         copied_state.ground_contact = self.ground_contact
         copied_state.contact_speed = self.contact_speed
+        copied_state.contact_force = self.contact_force
 
         return copied_state
 
@@ -193,8 +268,10 @@ class DroneState:
         self.orientation.fill(0)
         self.angular_velocity.fill(0)
         self.motor_speeds.fill(0)
+        self.rotor_speeds.fill(0)
         self.ground_contact = False
         self.contact_speed = 0.0
+        self.contact_force = 0.0
 
     def print_status(self):
 

@@ -108,8 +108,13 @@ LANDING_FLARE_HEIGHT = 0.8
 
 LANDING_APPROACH_GAIN = 0.5       # 1/s
 LANDING_TOUCHDOWN_SPEED = 0.02    # m/s
+LANDING_TOUCHDOWN_MARGIN = 0.06   # m; flare reaches touchdown speed this far above ground
 
 MAX_LANDING_SLOPE_DEGREES = 20.0
+
+# safe_nearby mode first looks for the nearest site this flat within the search
+# radius: a flat-bottomed body must tip onto a sloped site, which adds impact.
+PREFERRED_LANDING_SLOPE_DEGREES = 5.0
 
 LANDING_SEARCH_RADIUS = 3.0       # m
 
@@ -118,6 +123,10 @@ LANDING_SEARCH_RESOLUTION = 0.25  # m
 LANDING_MAX_ACCELERATION = 0.3    # m/s²
 
 LANDING_MAX_JERK = 0.5            # m/s³
+
+LANDING_MAX_IMPACT_SPEED = 0.35   # m/s; faster first contact counts as a hard landing
+
+LANDING_SPOOL_DOWN_TIME = 0.8     # s; thrust eases from hover to zero after first contact
 
 # ============================================================
 # TERRAIN
@@ -167,12 +176,55 @@ DT = 0.005                          # seconds per step
 SIMULATION_TIME = 40.0           # fixed-duration PID trials; missions run until arrival by default
 ARRIVAL_WAIT_TIME = 1.5          # simulated seconds to wait at the destination before stopping
 
-# Gym backend initialization (collision geometry is an approximation).
-GYM_BODY_RADIUS = 0.08            # metres; central body, excluding rotor arms
-GYM_BODY_HEIGHT = 0.04            # metres
-GYM_PHYSICS_SUBSTEPS = 1          # DT=0.005 -> control/physics both 200 Hz
-GYM_TERRAIN_BOUNDS = TERRAIN_BOUNDS
-GYM_TERRAIN_RESOLUTION = 0.5      # mesh spacing in metres
+GYM_PHYSICS_SUBSTEPS = 4          # DT=0.005 -> 200 Hz control, 800 Hz PyBullet physics
+
+
+# ============================================================
+# PYBULLET REFERENCE PHYSICS (not in the custom model)
+# ============================================================
+
+MOTOR_TIME_CONSTANT = 0.03        # s; rotor speed follows its command with this lag
+PROP_RADIUS = 0.10                # m; 8-inch propellers
+GROUND_EFFECT_COEFFICIENT = 1.0   # 1 = Cheeseman-Bennett model; 0 disables
+GROUND_EFFECT_MIN_HEIGHT = 0.5    # prop radii; caps the boost at +33% when very low
+ROTOR_DRAG_COEFFICIENTS = np.array([1.25e-4, 1.25e-4, 0.6e-4])  # N per m/s per rad/s of total rotor speed (body x, y, z)
+BODY_DRAG_AREA = 0.015            # m²; drag coefficient times frontal area
+AIR_DENSITY = 1.225               # kg/m³
+
+# Compare mode draws a different "true" PyBullet drone each episode; the
+# custom model keeps the nominal values above. Ranges multiply the nominal.
+PYBULLET_RANDOMIZE = True
+PYBULLET_RANDOMIZATION_SEED = None   # None = new draw every run; an integer repeats it
+PYBULLET_PARAMETER_RANGES = {
+    "TOTAL_MASS": (0.9, 1.1),
+    "MOMENT_OF_INERTIA": (0.7, 1.3),     # each axis drawn separately
+    "THRUST_COEFFICIENT": (0.85, 1.15),  # maximum thrust scales with it
+    "TORQUE_COEFFICIENT": (0.8, 1.2),
+    "ARM_LENGTH": (0.95, 1.05),
+    "MOTOR_TIME_CONSTANT": (0.5, 2.0),
+    "ROTOR_DRAG_COEFFICIENTS": (0.5, 2.0),
+    "BODY_DRAG_AREA": (0.5, 2.0),
+    "GROUND_EFFECT_COEFFICIENT": (0.7, 1.3),
+}
+
+
+# ============================================================
+# GROUND CONTACT (shared by both physics backends)
+# ============================================================
+
+# Both backends collide this cylinder (centred on the centre of mass) with the
+# same ground: flat terrain is an exact plane, other terrain the same triangle mesh.
+COLLISION_BODY_RADIUS = 0.08      # metres; central body, excluding rotor arms
+COLLISION_BODY_HEIGHT = 0.04      # metres; resting centre sits half of this above ground
+COLLISION_MESH_BOUNDS = TERRAIN_BOUNDS
+COLLISION_MESH_RESOLUTION = 0.5   # mesh spacing in metres
+
+CONTACT_FRICTION = 0.5            # Coulomb coefficient, drone body on ground
+CONTACT_DISTANCE_TOLERANCE = 1e-3 # metres; PyBullet gap still counted as touching
+
+# Paired regression rows closer than this (body bottom to ground) are excluded,
+# along with any step that touches the ground in either model.
+TRAINING_MIN_CLEARANCE = 0.05     # metres
 
 
 # ============================================================
